@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}QA Engine{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">Chat QA Analysis Engine</h1>
+            <p class="text-xl text-gray-600 mb-6">Automated quality assessment with built-in privacy protection</p>
+        </div>
+
+        <!-- Navigation Cards -->
+        <div class="grid md:grid-cols-2 gap-6 mb-8">
+            <!-- Single Analysis -->
+            <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-900">Single Chat Analysis</h3>
+                        <p class="text-gray-600">Analyze individual chat transcripts</p>
+                    </div>
+                </div>
+                <p class="text-gray-700 mb-4">Paste or upload a single chat transcript for detailed QA analysis. Perfect for spot-checks and individual reviews.</p>
+                <a href="{{ url_for('single_analysis') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    Start Analysis
+                    <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Batch Analysis -->
+            <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-900">Batch Analysis</h3>
+                        <p class="text-gray-600">Process multiple chat files at once</p>
+                    </div>
+                </div>
+                <p class="text-gray-700 mb-4">Upload multiple chat files for bulk analysis. Ideal for comprehensive quality reviews and reporting.</p>
+                <a href="{{ url_for('batch_analysis') }}" class="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                    Start Batch Analysis
+                    <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </a>
+            </div>
+        </div>
+
+        <!-- Privacy Protection Notice -->
+        <div class="bg-blue-50 border-l-4 border-blue-400 p-6 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-lg font-medium text-blue-800">🔒 Automatic Privacy Protection</h3>
+                    <div class="mt-2 text-sm text-blue-700">
+                        <p>This system automatically removes sensitive information before AI analysis:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1">
+                            <li>Phone numbers, email addresses, credit card numbers</li>
+                            <li>Bank accounts, ID numbers, dates of birth</li>
+                            <li>OTP codes, wallet addresses, transaction IDs</li>
+                        </ul>
+                        <p class="mt-2"><strong>Chat numbers and system IDs are preserved</strong> for proper analysis tracking.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Navigation -->
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Knowledge Base -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900">Knowledge Base</h3>
+                </div>
+                <p class="text-gray-600 mb-4">Browse QA guidelines and evaluation criteria</p>
+                <a href="{{ url_for('knowledge_base') }}" class="text-green-600 hover:text-green-700 font-medium">
+                    View Knowledge Base →
+                </a>
+            </div>
+
+            <!-- Settings -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mr-3">
+                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900">Settings</h3>
+                </div>
+                <p class="text-gray-600 mb-4">Configure AI provider and API settings</p>
+                <a href="{{ url_for('settings') }}" class="text-gray-600 hover:text-gray-700 font-medium">
+                    Manage Settings →
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

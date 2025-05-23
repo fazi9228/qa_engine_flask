@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Single Chat Analysis{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Single Chat Analysis</h1>
+            <p class="text-gray-600">Analyze individual chat transcripts with automatic privacy protection</p>
+        </div>
+
+        <!-- Anonymization Notice -->
+        <div class="bg-green-50 border-l-4 border-green-400 p-4 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-green-800">🔒 Automatic Privacy Protection</h3>
+                    <div class="mt-2 text-sm text-green-700">
+                        <p class="mb-2">Before AI analysis, we automatically remove:</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <ul class="list-disc list-inside space-y-1">
+                                <li>Phone numbers (+1-555-123-4567)</li>
+                                <li>Email addresses (john@test.com)</li>
+                                <li>Credit card numbers</li>
+                                <li>Bank account numbers</li>
+                            </ul>
+                            <ul class="list-disc list-inside space-y-1">
+                                <li>ID/Passport numbers</li>
+                                <li>OTP codes & verification codes</li>
+                                <li>Dates of birth</li>
+                                <li>Crypto wallet addresses</li>
+                            </ul>
+                        </div>
+                        <p class="mt-2 font-medium">✅ Chat numbers (Chat 01234567) and system IDs are preserved for analysis tracking.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Form -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <form method="POST" class="space-y-6" id="single-form">
+                <!-- Transcript Input -->
+                <div>
+                    <label for="transcript" class="block text-sm font-medium text-gray-700 mb-2">
+                        📝 Chat Transcript
+                    </label>
+                    <textarea name="transcript" 
+                              id="transcript" 
+                              rows="12" 
+                              class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Paste your chat transcript here...
+
+Example:
+Customer: Hi, I need help with my account
+Agent: Hello! I'd be happy to help you today..."
+                              required>{{ transcript if transcript }}</textarea>
+                    
+                    {% if detected_language %}
+                    <p class="mt-2 text-sm text-blue-600">
+                        🌐 Detected language: {{ detected_language }}
+                    </p>
+                    {% endif %}
+                </div>
+
+                <!-- Language Selection -->
+                <div>
+                    <label for="target_language" class="block text-sm font-medium text-gray-700 mb-2">
+                        🌐 Analysis Language
+                    </label>
+                    <select name="target_language" id="target_language" 
+                            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="en">English</option>
+                        <option value="vi">Tiếng Việt</option>
+                        <option value="auto">Auto-detect</option>
+                    </select>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex justify-center">
+                    <button type="submit" id="submit-btn"
+                            class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Analyze Chat
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        {% if result %}
+        <!-- Analysis Results -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Analysis Results</h2>
+                <div class="flex space-x-3">
+                    <a href="{{ url_for('download_report', type='single', format='json') }}" 
+                       class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        JSON
+                    </a>
+                    <a href="{{ url_for('download_report', type='single', format='csv') }}" 
+                       class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        CSV
+                    </a>
+                </div>
+            </div>
+
+            <!-- Overall Score -->
+            <div class="bg-gray-50 rounded-lg p-6 mb-6">
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-blue-600 mb-2">
+                        {{ result.weighted_overall_score }}%
+                    </div>
+                    <div class="text-lg text-gray-700">Overall Quality Score</div>
+                    {% if result.weighted_overall_score >= 85 %}
+                        <div class="mt-2 inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">🌟 Excellent</div>
+                    {% elif result.weighted_overall_score >= 70 %}
+                        <div class="mt-2 inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">✅ Good</div>
+                    {% elif result.weighted_overall_score >= 50 %}
+                        <div class="mt-2 inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">⚠️ Needs Work</div>
+                    {% else %}
+                        <div class="mt-2 inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">❌ Poor</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Parameter Details -->
+            <div class="space-y-4">
+                {% for category in categories %}
+                <div class="border border-gray-200 rounded-lg">
+                    <div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-900">{{ category.name }}</h3>
+                        {% if category.description %}
+                        <p class="text-sm text-gray-600 mt-1">{{ category.description }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="divide-y divide-gray-200">
+                        {% for param_name in category.parameters %}
+                        {% if param_name in result and result[param_name] is mapping %}
+                        {% set param_result = result[param_name] %}
+                        <div class="p-4">
+                            <div class="flex justify-between items-start mb-3">
+                                <h4 class="text-base font-medium text-gray-900">{{ param_name.replace('_', ' ').title() }}</h4>
+                                <div class="flex items-center">
+                                    <span class="text-2xl font-bold text-blue-600 mr-2">{{ param_result.score }}</span>
+                                    <span class="text-sm text-gray-500">/100</span>
+                                </div>
+                            </div>
+                            
+                            {% if param_result.explanation %}
+                            <div class="mb-3">
+                                <h5 class="text-sm font-medium text-gray-700 mb-1">Analysis:</h5>
+                                <p class="text-sm text-gray-600">{{ param_result.explanation }}</p>
+                            </div>
+                            {% endif %}
+                            
+                            {% if param_result.example %}
+                            <div class="mb-3">
+                                <h5 class="text-sm font-medium text-gray-700 mb-1">Example:</h5>
+                                <p class="text-sm text-gray-600 italic">"{{ param_result.example }}"</p>
+                            </div>
+                            {% endif %}
+                            
+                            {% if param_result.suggestion %}
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-1">Suggestion:</h5>
+                                <p class="text-sm text-blue-600">{{ param_result.suggestion }}</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Loading JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('single-form');
+    const submitButton = document.getElementById('submit-btn');
+    
+    if (form && submitButton) {
+        form.addEventListener('submit', function() {
+            // Show loading state
+            submitButton.disabled = true;
+            submitButton.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Analyzing Chat...
+            `;
+            
+            // Show processing message
+            const processingDiv = document.createElement('div');
+            processingDiv.id = 'processing-message';
+            processingDiv.className = 'mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg';
+            processingDiv.innerHTML = `
+                <div class="flex items-center">
+                    <svg class="animate-spin h-5 w-5 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <div>
+                        <p class="text-sm font-medium text-blue-800">🤖 Analyzing your chat transcript...</p>
+                        <p class="text-xs text-blue-600 mt-1">Removing sensitive data and performing QA analysis. This may take 30-60 seconds.</p>
+                    </div>
+                </div>
+            `;
+            
+            form.appendChild(processingDiv);
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Analysis{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Batch Chat Analysis</h1>
+            <p class="text-gray-600">Upload multiple chat files for automated QA analysis with built-in privacy protection</p>
+        </div>
+
+        <!-- Anonymization Notice -->
+        <div class="bg-green-50 border-l-4 border-green-400 p-4 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-green-800">🔒 Automatic Privacy Protection for All Files</h3>
+                    <div class="mt-2 text-sm text-green-700">
+                        <p class="mb-2">Before AI analysis, we automatically remove from all uploaded chats:</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <ul class="list-disc list-inside space-y-1">
+                                <li>Phone numbers (+1-555-123-4567)</li>
+                                <li>Email addresses (john@test.com)</li>
+                                <li>Credit card numbers</li>
+                                <li>Bank account numbers</li>
+                                <li>ID/Passport numbers</li>
+                            </ul>
+                            <ul class="list-disc list-inside space-y-1">
+                                <li>OTP codes & verification codes</li>
+                                <li>Dates of birth</li>
+                                <li>Crypto wallet addresses</li>
+                                <li>Transaction IDs</li>
+                                <li>Personal identifiers</li>
+                            </ul>
+                        </div>
+                        <p class="mt-2 font-medium">✅ Chat numbers (Chat 01234567) and system IDs are preserved for analysis tracking.</p>
+                        <p class="text-xs mt-1 text-green-600">This happens automatically for every chat in every file - no action needed from you.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Form -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <form method="POST" enctype="multipart/form-data" class="space-y-6" id="batch-form">
+                
+                <!-- File Upload Section -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        📁 Select Chat Files
+                    </label>
+                    <input type="file" 
+                           name="batch_files" 
+                           multiple 
+                           accept=".txt,.csv,.log,.docx" 
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md"
+                           required>
+                    <p class="mt-2 text-sm text-gray-500">
+                        Supported formats: .txt, .csv, .log, .docx (Max 10MB per file)
+                    </p>
+                </div>
+
+                <!-- Language Selection -->
+                <div>
+                    <label for="target_language" class="block text-sm font-medium text-gray-700 mb-2">
+                        🌐 Analysis Language
+                    </label>
+                    <select name="target_language" id="target_language" 
+                            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="en">English</option>
+                        <option value="vi">Tiếng Việt</option>
+                        <option value="auto">Auto-detect</option>
+                    </select>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex justify-center">
+                    <button type="submit" id="submit-btn"
+                            class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Start Analysis
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        {% if results %}
+        <!-- Results Section -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Analysis Results</h2>
+                <div class="flex space-x-3">
+                    <a href="{{ url_for('download_report', type='batch', format='csv') }}" 
+                       class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Download CSV
+                    </a>
+                </div>
+            </div>
+
+            <!-- Summary Statistics -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <div class="text-2xl font-bold text-blue-600">{{ results|length }}</div>
+                    <div class="text-sm text-blue-800">Total Chats</div>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <div class="text-2xl font-bold text-green-600">
+                        {{ "%.1f"|format(results|map(attribute='weighted_overall_score')|sum / results|length) }}%
+                    </div>
+                    <div class="text-sm text-green-800">Average Score</div>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <div class="text-2xl font-bold text-purple-600">
+                        {{ results|groupby('detected_language')|list|length }}
+                    </div>
+                    <div class="text-sm text-purple-800">Languages</div>
+                </div>
+                <div class="bg-yellow-50 p-4 rounded-lg">
+                    <div class="text-2xl font-bold text-yellow-600">🔒</div>
+                    <div class="text-sm text-yellow-800">Privacy Protected</div>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chat ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quality</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Language</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preview</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for result in results %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {{ result.chat_id }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="text-sm font-medium text-gray-900">{{ result.weighted_overall_score }}%</div>
+                                    <div class="ml-2">
+                                        {% if result.weighted_overall_score >= 85 %}
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Excellent</span>
+                                        {% elif result.weighted_overall_score >= 70 %}
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Good</span>
+                                        {% elif result.weighted_overall_score >= 50 %}
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Needs Work</span>
+                                        {% else %}
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Poor</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {% if result.weighted_overall_score >= 85 %}🌟 Excellent
+                                {% elif result.weighted_overall_score >= 70 %}✅ Good
+                                {% elif result.weighted_overall_score >= 50 %}⚠️ Needs Work
+                                {% else %}❌ Poor
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ result.detected_language }}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                                {{ result.content_preview[:100] }}...
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Loading JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('batch-form');
+    const submitButton = document.getElementById('submit-btn');
+    
+    if (form && submitButton) {
+        form.addEventListener('submit', function() {
+            // Check if files are selected
+            const fileInput = document.querySelector('input[type="file"]');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                alert('Please select at least one file to analyze.');
+                return false;
+            }
+            
+            // Show loading state
+            submitButton.disabled = true;
+            submitButton.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing Files...
+            `;
+            
+            const fileCount = fileInput.files.length;
+            const estimatedTime = Math.max(2, fileCount * 1.5); // At least 2 minutes, then 1.5 min per file
+            
+            // Show processing message
+            const processingDiv = document.createElement('div');
+            processingDiv.id = 'processing-message';
+            processingDiv.className = 'mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg';
+            processingDiv.innerHTML = `
+                <div class="flex items-center">
+                    <svg class="animate-spin h-5 w-5 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <div>
+                        <p class="text-sm font-medium text-blue-800">🔄 Processing ${fileCount} file(s)...</p>
+                        <p class="text-xs text-blue-600 mt-1">Removing sensitive data and analyzing chats. Estimated time: ${Math.round(estimatedTime)} minutes. Please don't close this page.</p>
+                        <div class="mt-2">
+                            <div class="bg-blue-200 rounded-full h-2">
+                                <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width: 30%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            form.appendChild(processingDiv);
+        });
+    }
+});
+</script>
+{% endblock %}

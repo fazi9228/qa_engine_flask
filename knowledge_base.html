@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Knowledge Base{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Knowledge Base</h1>
+            <p class="text-gray-600">Browse QA guidelines, evaluation criteria, and frequently asked questions</p>
+        </div>
+
+        <!-- Privacy Notice -->
+        <div class="bg-green-50 border-l-4 border-green-400 p-4 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-green-800">🔒 Privacy-First QA System</h3>
+                    <p class="mt-2 text-sm text-green-700">
+                        All analysis tools automatically remove sensitive customer data (phone numbers, emails, credit cards, etc.) before processing, ensuring privacy compliance while maintaining analysis quality.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Category Filter -->
+                <div>
+                    <label for="category-filter" class="block text-sm font-medium text-gray-700 mb-2">
+                        🏷️ Filter by Category
+                    </label>
+                    <form method="GET" action="{{ url_for('knowledge_base') }}">
+                        <select name="category" id="category-filter" 
+                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                onchange="this.form.submit()">
+                            <option value="All Categories" {% if selected_category == 'All Categories' %}selected{% endif %}>All Categories</option>
+                            {% for category in categories %}
+                            <option value="{{ category }}" {% if selected_category == category %}selected{% endif %}>{{ category }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </div>
+
+                <!-- Search Box -->
+                <div>
+                    <label for="search-box" class="block text-sm font-medium text-gray-700 mb-2">
+                        🔍 Search Knowledge Base
+                    </label>
+                    <input type="text" 
+                           id="search-box" 
+                           placeholder="Type to search questions and answers..."
+                           class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Summary -->
+        <div class="mb-6">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="flex items-center">
+                    <svg class="h-5 w-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="text-sm font-medium text-blue-800">
+                        Showing {{ qa_pairs|length }} {% if selected_category != 'All Categories' %}{{ selected_category }}{% endif %} knowledge base entries
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Knowledge Base Entries -->
+        <div class="space-y-4" id="kb-entries">
+            {% if qa_pairs %}
+                {% for qa in qa_pairs %}
+                <div class="bg-white rounded-lg shadow-md border border-gray-200 kb-entry" data-category="{{ qa.category|default('General') }}">
+                    <!-- Question Header -->
+                    <div class="px-6 py-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors" onclick="toggleAnswer('answer-{{ loop.index }}')">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-start space-x-3">
+                                <div class="flex-shrink-0 mt-1">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        Q{{ loop.index }}
+                                    </span>
+                                </div>
+                                <div class="flex-1">
+                                    <h3 class="text-lg font-medium text-gray-900 mb-1">{{ qa.question }}</h3>
+                                    {% if qa.category %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+                                        {{ qa.category }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-gray-400 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="icon-{{ loop.index }}">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Answer Content -->
+                    <div class="px-6 py-4 hidden" id="answer-{{ loop.index }}">
+                        <div class="prose prose-blue max-w-none">
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                                    <svg class="h-4 w-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    Answer:
+                                </h4>
+                                <div class="text-gray-800 leading-relaxed">
+                                    {{ qa.answer|safe }}
+                                </div>
+                            </div>
+                            
+                            {% if qa.examples %}
+                            <div class="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                                <h4 class="text-sm font-medium text-yellow-800 mb-2">💡 Examples:</h4>
+                                <div class="text-sm text-yellow-700">
+                                    {{ qa.examples|safe }}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if qa.related_topics %}
+                            <div class="mt-4">
+                                <h4 class="text-sm font-medium text-gray-700 mb-2">🔗 Related Topics:</h4>
+                                <div class="flex flex-wrap gap-2">
+                                    {% for topic in qa.related_topics %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        {{ topic }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <!-- Empty State -->
+                <div class="text-center py-12">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">No knowledge base entries found</h3>
+                    <p class="mt-1 text-sm text-gray-500">Try adjusting your search criteria or category filter.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Quick Stats -->
+        {% if qa_pairs %}
+        <div class="mt-8 bg-gray-50 rounded-lg p-6">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">📊 Knowledge Base Statistics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div class="bg-white rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-blue-600">{{ qa_pairs|length }}</div>
+                    <div class="text-gray-600">Total Entries</div>
+                </div>
+                <div class="bg-white rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-green-600">{{ categories|length }}</div>
+                    <div class="text-gray-600">Categories</div>
+                </div>
+                <div class="bg-white rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-purple-600">{{ selected_category if selected_category != 'All Categories' else 'All' }}</div>
+                    <div class="text-gray-600">Current Filter</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- JavaScript for Interactive Features -->
+<script>
+// Toggle answer visibility
+function toggleAnswer(answerId) {
+    const answerElement = document.getElementById(answerId);
+    const iconElement = document.getElementById(answerId.replace('answer-', 'icon-'));
+    
+    if (answerElement.classList.contains('hidden')) {
+        answerElement.classList.remove('hidden');
+        iconElement.style.transform = 'rotate(180deg)';
+    } else {
+        answerElement.classList.add('hidden');
+        iconElement.style.transform = 'rotate(0deg)';
+    }
+}
+
+// Search functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const searchBox = document.getElementById('search-box');
+    const entries = document.querySelectorAll('.kb-entry');
+    
+    if (searchBox) {
+        searchBox.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            let visibleCount = 0;
+            
+            entries.forEach(function(entry) {
+                const text = entry.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    entry.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    entry.style.display = 'none';
+                }
+            });
+            
+            // Update results summary
+            const summaryElement = document.querySelector('.bg-blue-50 .text-blue-800');
+            if (summaryElement) {
+                summaryElement.textContent = `Showing ${visibleCount} ${searchTerm ? 'matching' : ''} knowledge base entries`;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
