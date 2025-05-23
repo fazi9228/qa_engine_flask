@@ -96,6 +96,102 @@ Agent: Hello! I'd be happy to help you today..."
         </div>
 
         {% if result %}
+        <!-- Anonymization Preview Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">🔒 Privacy Protection in Action</h2>
+                <p class="text-gray-600">See how your data was protected before AI analysis:</p>
+            </div>
+
+            <!-- Toggle Buttons -->
+            <div class="flex space-x-4 mb-6">
+                <button onclick="showOriginal()" id="original-btn" 
+                        class="px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors font-medium">
+                    👁️ Original Chat (Sensitive)
+                </button>
+                <button onclick="showAnonymized()" id="anonymized-btn"
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
+                    🔒 Anonymized Chat (AI Analyzed)
+                </button>
+            </div>
+
+            <!-- Warning for Original -->
+            <div id="original-warning" class="bg-red-50 border-l-4 border-red-400 p-4 mb-4 hidden">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-red-700">
+                            <strong>⚠️ Contains Sensitive Data:</strong> This is your original chat with potentially sensitive information visible.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info for Anonymized -->
+            <div id="anonymized-info" class="bg-green-50 border-l-4 border-green-400 p-4 mb-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-green-700">
+                            <strong>✅ Privacy Protected:</strong> This is the anonymized version that was sent to AI for analysis. All sensitive data has been removed or replaced.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Content Display -->
+            <div class="border rounded-lg">
+                <!-- Original Chat -->
+                <div id="original-chat" class="p-4 bg-red-50 hidden">
+                    <h4 class="font-medium text-red-800 mb-3">Original Chat (With Sensitive Data)</h4>
+                    <div class="bg-white rounded border p-4 max-h-96 overflow-y-auto">
+                        <pre class="whitespace-pre-wrap text-sm text-gray-800 font-mono">{{ transcript }}</pre>
+                    </div>
+                </div>
+
+                <!-- Anonymized Chat -->
+                <div id="anonymized-chat" class="p-4 bg-green-50">
+                    <h4 class="font-medium text-green-800 mb-3">Anonymized Chat (Sent to AI)</h4>
+                    <div class="bg-white rounded border p-4 max-h-96 overflow-y-auto">
+                        <pre class="whitespace-pre-wrap text-sm text-gray-800 font-mono" id="anonymized-content">{{ anonymized_transcript if anonymized_transcript else 'Anonymized version will appear here after analysis...' }}</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Anonymization Stats -->
+            {% if anonymization_stats %}
+            <div class="mt-6 bg-blue-50 rounded-lg p-4">
+                <h4 class="font-medium text-blue-800 mb-3">📊 Privacy Protection Summary</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600">{{ anonymization_stats.total_replacements }}</div>
+                        <div class="text-blue-700">Items Protected</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-600">{{ anonymization_stats.phone_count or 0 }}</div>
+                        <div class="text-green-700">Phone Numbers</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-purple-600">{{ anonymization_stats.email_count or 0 }}</div>
+                        <div class="text-purple-700">Email Addresses</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-orange-600">{{ anonymization_stats.other_count or 0 }}</div>
+                        <div class="text-orange-700">Other Sensitive Data</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
         <!-- Analysis Results -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex justify-between items-center mb-6">
@@ -192,8 +288,34 @@ Agent: Hello! I'd be happy to help you today..."
     </div>
 </div>
 
-<!-- Loading JavaScript -->
+<!-- JavaScript for Interactive Features -->
 <script>
+// Toggle between original and anonymized chat
+function showOriginal() {
+    document.getElementById('original-chat').classList.remove('hidden');
+    document.getElementById('anonymized-chat').classList.add('hidden');
+    document.getElementById('original-warning').classList.remove('hidden');
+    document.getElementById('anonymized-info').classList.add('hidden');
+    
+    document.getElementById('original-btn').classList.remove('bg-red-100', 'text-red-800');
+    document.getElementById('original-btn').classList.add('bg-red-600', 'text-white');
+    document.getElementById('anonymized-btn').classList.remove('bg-green-600', 'text-white');
+    document.getElementById('anonymized-btn').classList.add('bg-green-100', 'text-green-800');
+}
+
+function showAnonymized() {
+    document.getElementById('anonymized-chat').classList.remove('hidden');
+    document.getElementById('original-chat').classList.add('hidden');
+    document.getElementById('anonymized-info').classList.remove('hidden');
+    document.getElementById('original-warning').classList.add('hidden');
+    
+    document.getElementById('anonymized-btn').classList.remove('bg-green-100', 'text-green-800');
+    document.getElementById('anonymized-btn').classList.add('bg-green-600', 'text-white');
+    document.getElementById('original-btn').classList.remove('bg-red-600', 'text-white');
+    document.getElementById('original-btn').classList.add('bg-red-100', 'text-red-800');
+}
+
+// Loading functionality
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('single-form');
     const submitButton = document.getElementById('submit-btn');
