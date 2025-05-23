@@ -1,0 +1,169 @@
+# QA Engine - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# ================ CORE FRAMEWORK ================
+Flask==2.3.3
+Werkzeug==2.3.7
+Jinja2==3.1.2
+MarkupSafe==2.1.3
+itsdangerous==2.1.2
+click==8.1.7
+
+# ================ AI & ML LIBRARIES ================
+# Anthropic Claude API
+anthropic==0.25.1
+
+# OpenAI API
+openai==1.35.15
+
+# Text processing and NLP
+nltk==3.8.1
+spacy==3.7.2
+langdetect==1.0.9
+regex==2023.8.8
+
+# ================ DATA PROCESSING ================
+# File processing
+python-docx==0.8.11
+openpyxl==3.1.2
+PyPDF2==3.0.1
+python-magic==0.4.27
+
+# CSV and data manipulation
+pandas==2.1.1
+numpy==1.24.3
+
+# JSON handling
+jsonschema==4.19.1
+
+# ================ WEB & HTTP ================
+# HTTP requests
+requests==2.31.0
+urllib3==2.0.4
+
+# Session management
+Flask-Session==0.5.0
+
+# CORS handling (if needed)
+Flask-CORS==4.0.0
+
+# ================ SECURITY ================
+# Password hashing
+bcrypt==4.0.1
+passlib==1.7.4
+
+# Input validation
+wtforms==3.0.1
+email-validator==2.0.0
+
+# Environment variables
+python-dotenv==1.0.0
+
+# ================ FILE HANDLING ================
+# File type detection
+python-magic-bin==0.4.14  # Windows compatibility
+
+# Archive handling
+zipfile-deflate64==0.2.0
+
+# ================ UTILITIES ================
+# Date/time handling
+python-dateutil==2.8.2
+
+# UUID generation
+uuid==1.30
+
+# Logging
+colorlog==6.7.0
+
+# Configuration
+pyyaml==6.0.1
+configparser==6.0.0
+
+# ================ DEVELOPMENT TOOLS ================
+# Testing
+pytest==7.4.2
+pytest-flask==1.2.0
+pytest-cov==4.1.0
+
+# Code quality
+flake8==6.1.0
+black==23.9.1
+isort==5.12.0
+
+# Type checking
+mypy==1.5.1
+types-requests==2.31.0.8
+
+# ================ MONITORING & DEBUGGING ================
+# Performance monitoring
+psutil==5.9.5
+
+# Memory profiling
+memory-profiler==0.61.0
+
+# Debug toolbar
+Flask-DebugToolbar==0.13.1
+
+# ================ PRODUCTION DEPLOYMENT ================
+# WSGI server
+gunicorn==21.2.0
+
+# Process management
+supervisor==4.2.5
+
+# ================ OPTIONAL DEPENDENCIES ================
+# Database (if implementing user management)
+# SQLAlchemy==2.0.21
+# Flask-SQLAlchemy==3.0.5
+# Flask-Migrate==4.0.5
+
+# Caching (if implementing Redis cache)
+# redis==5.0.0
+# Flask-Caching==2.1.0
+
+# Background tasks (if implementing Celery)
+# celery==5.3.2
+# kombu==5.3.2
+
+# Email notifications (if implementing alerts)
+# Flask-Mail==0.9.1
+
+# Rate limiting (if implementing API limits)
+# Flask-Limiter==3.5.0
+
+# ================ PLATFORM SPECIFIC ================
+# Windows specific
+pywin32==306; sys_platform == "win32"
+
+# Linux specific  
+python3-dev; sys_platform == "linux"
+
+# macOS specific
+# pyobjc-core==10.0; sys_platform == "darwin"
+
+# ================ VERSION CONSTRAINTS ================
+# Ensure compatibility
+setuptools>=65.0.0
+pip>=23.0.0
+wheel>=0.41.0
+
+# Security updates
+cryptography>=41.0.0
+certifi>=2023.7.22
+
+# ================ DEVELOPMENT DEPENDENCIES ================
+# Only install in development environment
+# pip install -r requirements-dev.txt
+
+# Jupyter (for data analysis)
+# jupyter==1.0.0
+# notebook==7.0.4
+
+# Documentation
+# sphinx==7.2.6
+# sphinx-rtd-theme==1.3.0
+
+# API documentation
+# flask-restx==1.2.0
+# flasgger==0.9.7.1

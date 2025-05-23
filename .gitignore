@@ -1,0 +1,363 @@
+# 🔍 QA Engine - Chat Quality Analysis with Privacy Protection
+
+A comprehensive Flask-based web application for automated chat quality assessment with built-in data anonymization and privacy protection.
+
+![QA Engine](https://img.shields.io/badge/QA%20Engine-v2.0-blue)
+![Python](https://img.shields.io/badge/Python-3.8+-green)
+![Flask](https://img.shields.io/badge/Flask-2.0+-red)
+![Privacy](https://img.shields.io/badge/Privacy-Protected-gold)
+![License](https://img.shields.io/badge/License-MIT-lightgrey)
+
+## 🌟 Features
+
+### 🔒 **Privacy-First Architecture**
+- **Automatic Data Anonymization**: Removes phone numbers, emails, credit cards, and other sensitive data before AI analysis
+- **Chat ID Preservation**: Maintains chat numbers and system identifiers for tracking
+- **GDPR Compliant**: Built with privacy regulations in mind
+- **Zero Data Retention**: Sensitive information never stored
+
+### 📊 **Analysis Capabilities**
+- **Single Chat Analysis**: Detailed QA assessment of individual conversations
+- **Batch Processing**: Analyze multiple chat files simultaneously
+- **Multi-language Support**: English, Vietnamese, and auto-detection
+- **Comprehensive Scoring**: Weighted evaluation across multiple parameters
+- **Detailed Reporting**: CSV and JSON exports with actionable insights
+
+### 🤖 **AI Integration**
+- **Multiple AI Providers**: Anthropic Claude and OpenAI GPT-4 support
+- **Configurable Models**: Easy switching between AI models
+- **Smart Prompting**: Optimized prompts for consistent quality assessment
+- **Rate Limiting**: Built-in protection against API overuse
+
+### 💼 **Enterprise Features**
+- **Knowledge Base**: Searchable FAQ and guidelines database
+- **User Authentication**: Secure login system
+- **File Format Support**: .txt, .csv, .log, .docx files
+- **Responsive Design**: Works on desktop and mobile devices
+- **Real-time Processing**: Live progress indicators and status updates
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.8 or higher
+- Flask 2.0+
+- API key from Anthropic or OpenAI
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/qa-engine.git
+   cd qa-engine
+   ```
+
+2. **Create virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set environment variables**
+   ```bash
+   # Create .env file
+   echo "FLASK_SECRET_KEY=your-secret-key-here" >> .env
+   echo "QA_PASSWORD=your-admin-password" >> .env
+   echo "ANTHROPIC_API_KEY=your-anthropic-key" >> .env
+   echo "OPENAI_API_KEY=your-openai-key" >> .env
+   ```
+
+5. **Initialize the application**
+   ```bash
+   python -c "from knowledge_base import KnowledgeBase; kb = KnowledgeBase('qa_knowledge_base.json'); print('Knowledge base initialized')"
+   ```
+
+6. **Run the application**
+   ```bash
+   python qa_main_anz.py
+   ```
+
+7. **Access the application**
+   - Open your browser to `http://localhost:5001`
+   - Login with your configured password
+
+## 📁 Project Structure
+
+```
+qa-engine/
+├── 📄 README.md                           # This file
+├── 📄 requirements.txt                    # Python dependencies
+├── 📄 .gitignore                         # Git ignore rules
+├── 📄 .env.example                       # Environment variables template
+├── 📄 qa_main_anz.py                     # Main Flask application
+├── 📄 chat_qa_with_anonymization.py      # Privacy-enabled analysis engine
+├── 📄 chat_anonymizer.py                 # Data anonymization module
+├── 📄 enhanced_chat_processor.py         # Chat extraction and processing
+├── 📄 knowledge_base.py                  # Knowledge base management
+├── 📄 utils.py                          # Utility functions
+├── 📁 templates/                         # HTML templates
+│   ├── 📄 base.html                     # Base template with navigation
+│   ├── 📄 index.html                    # Dashboard/home page
+│   ├── 📄 single_analysis.html          # Single chat analysis
+│   ├── 📄 batch_analysis.html           # Batch processing
+│   ├── 📄 knowledge_base.html           # FAQ and guidelines
+│   ├── 📄 settings.html                 # Configuration page
+│   ├── 📄 login.html                    # Authentication
+│   └── 📄 anonymization.html            # Manual anonymization tool
+├── 📁 temp_results/                      # Temporary analysis results
+├── 📁 config/                           # Configuration files
+│   ├── 📄 evaluation_rules.json         # QA evaluation parameters
+│   ├── 📄 scoring_system.json           # Scoring methodology
+│   ├── 📄 qa_knowledge_base.json        # Knowledge base content
+│   └── 📄 QA_prompt.md                  # AI analysis prompt template
+└── 📁 static/                           # Static assets (if any)
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `FLASK_SECRET_KEY` | Flask session encryption key | ✅ | - |
+| `QA_PASSWORD` | Admin login password | ✅ | - |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key | ⚠️ | - |
+| `OPENAI_API_KEY` | OpenAI GPT API key | ⚠️ | - |
+| `FLASK_DEBUG` | Enable debug mode | ❌ | False |
+
+⚠️ At least one AI provider API key is required.
+
+### Evaluation Rules
+
+The QA evaluation is configured through `evaluation_rules.json`:
+
+```json
+{
+  "categories": [
+    {
+      "name": "Communication Quality",
+      "parameters": ["greeting", "tone", "clarity"]
+    }
+  ],
+  "parameters": [
+    {
+      "name": "greeting",
+      "weight": 15,
+      "description": "Professional greeting and introduction"
+    }
+  ]
+}
+```
+
+## 🔒 Privacy & Security
+
+### Data Protection
+- **Automatic Anonymization**: All sensitive data removed before AI processing
+- **No Data Storage**: Anonymized data not permanently stored
+- **Secure Sessions**: Flask sessions with secure secret keys
+- **API Key Protection**: Environment-based credential management
+
+### Anonymized Data Types
+- 📞 Phone numbers
+- 📧 Email addresses  
+- 💳 Credit card numbers
+- 🏦 Bank account numbers
+- 🆔 ID/Passport numbers
+- 🔢 OTP codes
+- 📅 Dates of birth
+- 💰 Cryptocurrency addresses
+- 🔗 Transaction IDs
+
+### Preserved Identifiers
+- Chat numbers (Chat 01234567)
+- Session IDs
+- Ticket numbers
+- Case references
+
+## 📊 Usage Examples
+
+### Single Chat Analysis
+```python
+# Via API (if implemented)
+POST /api/analyze
+{
+  "transcript": "Customer: Hi, I need help...",
+  "language": "en"
+}
+```
+
+### Batch Processing
+1. Upload multiple chat files (.txt, .csv, .log, .docx)
+2. Select analysis language
+3. Click "Start Analysis"
+4. Download results as CSV or JSON
+
+### Knowledge Base Management
+- Add/edit QA guidelines
+- Search FAQ entries
+- Categorize by topic
+- Export knowledge base
+
+## 🚀 Deployment
+
+### Production Deployment
+
+1. **Use a production WSGI server**
+   ```bash
+   pip install gunicorn
+   gunicorn -w 4 -b 0.0.0.0:5001 qa_main_anz:app
+   ```
+
+2. **Set production environment variables**
+   ```bash
+   export FLASK_DEBUG=False
+   export FLASK_SECRET_KEY=your-very-secure-secret-key
+   ```
+
+3. **Configure reverse proxy (nginx)**
+   ```nginx
+   server {
+       listen 80;
+       server_name your-domain.com;
+       
+       location / {
+           proxy_pass http://127.0.0.1:5001;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+       }
+   }
+   ```
+
+### Docker Deployment
+```dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+EXPOSE 5001
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5001", "qa_main_anz:app"]
+```
+
+## 🧪 Testing
+
+### Run Tests
+```bash
+# Unit tests
+python -m pytest tests/
+
+# Integration tests
+python -m pytest tests/integration/
+
+# Coverage report
+python -m pytest --cov=. tests/
+```
+
+### Manual Testing
+1. Test single chat analysis with sample data
+2. Upload batch files and verify processing
+3. Check anonymization by including phone numbers/emails
+4. Verify knowledge base search functionality
+5. Test API key configuration
+
+## 🛠️ Development
+
+### Adding New Evaluation Parameters
+1. Edit `evaluation_rules.json`
+2. Add parameter definition with weight
+3. Update `QA_prompt.md` template
+4. Test with sample chats
+
+### Adding New AI Providers
+1. Create provider class in `utils.py`
+2. Add configuration in settings
+3. Update model selection logic
+4. Test API integration
+
+### Customizing Anonymization Rules
+1. Edit `chat_anonymizer.py`
+2. Add new regex patterns
+3. Test with sample sensitive data
+4. Verify preservation of system IDs
+
+## 📚 API Documentation
+
+### Endpoints
+- `GET /` - Dashboard
+- `GET /single-analysis` - Single chat analysis page
+- `POST /single-analysis` - Process single chat
+- `GET /batch-analysis` - Batch analysis page
+- `POST /batch-analysis` - Process multiple chats
+- `GET /knowledge-base` - FAQ and guidelines
+- `GET /settings` - Configuration page
+- `GET /anonymization-status` - Privacy protection info
+
+### Response Formats
+All analysis results include:
+```json
+{
+  "weighted_overall_score": 85.5,
+  "parameter_name": {
+    "score": 90,
+    "explanation": "Detailed analysis...",
+    "example": "Quote from chat...",
+    "suggestion": "Improvement recommendation..."
+  }
+}
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Follow PEP 8 style guide
+- Add tests for new features
+- Update documentation
+- Ensure privacy protection for any new data handling
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Anthropic** - For Claude AI capabilities
+- **OpenAI** - For GPT model access
+- **Flask Community** - For the excellent web framework
+- **Tailwind CSS** - For beautiful, responsive styling
+
+## 📞 Support
+
+- 📧 Email: support@yourcompany.com
+- 📖 Documentation: [Link to docs]
+- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/qa-engine/issues)
+- 💬 Discussions: [GitHub Discussions](https://github.com/yourusername/qa-engine/discussions)
+
+## 🔄 Changelog
+
+### v2.0.0 (2025-01-XX)
+- ✅ Added automatic data anonymization
+- ✅ Implemented privacy-first architecture
+- ✅ Enhanced UI with colorful header
+- ✅ Added knowledge base management
+- ✅ Improved batch processing with progress indicators
+- ✅ Added multi-language support
+
+### v1.0.0 (2024-XX-XX)
+- ✅ Initial release
+- ✅ Basic QA analysis functionality
+- ✅ Single and batch processing
+- ✅ AI provider integration
+
+---
+
+**Built with ❤️ for privacy-conscious quality assurance teams**
