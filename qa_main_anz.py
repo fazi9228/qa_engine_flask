@@ -363,12 +363,15 @@ def download_anonymized(format):
         return f"Download failed: {e}", 500
 
 # ================ SINGLE ANALYSIS (UPDATED with auto-anonymization) ================
+
 @app.route('/single-analysis', methods=['GET', 'POST'])
 def single_analysis():
-    """Single chat analysis - now with auto-anonymization if enabled"""
+    """Single chat analysis with anonymized preview for transparency"""
     global current_single_file
     result = None
     transcript = None
+    anonymized_transcript = None
+    anonymization_stats = None
     
     if request.method == 'POST':
         transcript = request.form.get('transcript')
@@ -377,28 +380,79 @@ def single_analysis():
             provider, model_name = get_api_provider()
             target_language = request.form.get('target_language', 'en')
             
-            if ANONYMIZATION_ENABLED:
-                print("=== SINGLE ANALYSIS WITH AUTO-ANONYMIZATION STARTED ===")
-            else:
-                print("=== SINGLE ANALYSIS (NO ANONYMIZATION) STARTED ===")
+            print("=== SINGLE ANALYSIS WITH ANONYMIZATION PREVIEW STARTED ===")
             
-            # This now automatically anonymizes if anonymization is enabled
-            result = analyze_chat_transcript(
-                transcript,
-                chat_rules,
-                kb,
-                target_language=target_language,
-                prompt_template_path="QA_prompt.md",
-                model_provider=provider,
-                model_name=model_name
-            )
-            
-            # Store result in file
-            if result:
-                current_single_file = save_results_simple(result, "single")
-                print(f"✅ Stored single result in file: {current_single_file}")
-            else:
-                print("❌ No result to store")
+            try:
+                # Step 1: Create anonymizer and get anonymized version for display
+                from chat_anonymizer import ChatAnonymizer
+                anonymizer = ChatAnonymizer()
+                anonymized_transcript, anonymization_report = anonymizer.anonymize_text(transcript)
+                
+                # Create anonymization stats for display
+                anonymization_stats = {
+                    'total_replacements': anonymization_report.get('total_replacements', 0),
+                    'phone_count': anonymization_report.get('replacements_by_type', {}).get('phone', 0),
+                    'email_count': anonymization_report.get('replacements_by_type', {}).get('email', 0),
+                    'other_count': max(0, anonymization_report.get('total_replacements', 0) - 
+                                 anonymization_report.get('replacements_by_type', {}).get('phone', 0) - 
+                                 anonymization_report.get('replacements_by_type', {}).get('email', 0))
+                }
+                
+                print(f"🔒 Anonymization complete: {anonymization_stats['total_replacements']} items removed")
+                
+                # Step 2: Perform analysis using the anonymization-enabled function if available
+                try:
+                    # Try to use the anonymization-enabled analysis
+                    print("Attempting auto-anonymization analysis...")
+                    result = analyze_with_anonymization(
+                        transcript,  # Function handles anonymization internally
+                        chat_rules,
+                        kb,
+                        target_language=target_language,
+                        prompt_template_path="QA_prompt.md",
+                        model_provider=provider,
+                        model_name=model_name
+                    )
+                    print("✅ Used auto-anonymization analysis")
+                    
+                except NameError:
+                    # Fall back to regular analysis with pre-anonymized text
+                    print("Auto-anonymization function not available, using standard analysis with pre-anonymized text")
+                    from chat_qa import analyze_chat_transcript as original_analyze
+                    result = original_analyze(
+                        anonymized_transcript,  # Use our pre-anonymized version
+                        chat_rules,
+                        kb,
+                        target_language=target_language,
+                        prompt_template_path="QA_prompt.md",
+                        model_provider=provider,
+                        model_name=model_name
+                    )
+                    print("✅ Used standard analysis with anonymized text")
+                
+                # Store result in file
+                if result:
+                    # Add anonymization info to result for potential future use
+                    result['anonymization_info'] = {
+                        'was_anonymized': True,
+                        'total_replacements': anonymization_stats['total_replacements'],
+                        'replacement_types': anonymization_report.get('replacements_by_type', {})
+                    }
+                    
+                    current_single_file = save_results_simple(result, "single")
+                    print(f"✅ Stored single result in file: {current_single_file}")
+                else:
+                    print("❌ No result to store")
+                    
+            except Exception as e:
+                print(f"❌ Error during analysis: {str(e)}")
+                import traceback
+                print(traceback.format_exc())
+                flash(f'Analysis error: {str(e)}')
+                # Reset variables on error
+                result = None
+                anonymized_transcript = None
+                anonymization_stats = None
     
     # Language detection
     detected_language = None
@@ -409,17 +463,16 @@ def single_analysis():
             print(f"Detected language: {detected_language} (code: {lang_code})")
         except Exception as lang_error:
             print(f"Language detection error: {str(lang_error)}")
-            import traceback
-            print(traceback.format_exc())
             detected_language = "English (fallback)"
     
     return render_template(
         'single_analysis.html', 
         result=result, 
         transcript=transcript,
+        anonymized_transcript=anonymized_transcript,
+        anonymization_stats=anonymization_stats,
         detected_language=detected_language,
-        categories=chat_rules.get('categories', []),
-        anonymization_enabled=ANONYMIZATION_ENABLED
+        categories=chat_rules.get('categories', [])
     )
 
 # ================ BATCH ANALYSIS (UPDATED with auto-anonymization) ================
