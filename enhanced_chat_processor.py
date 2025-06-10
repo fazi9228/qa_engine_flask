@@ -241,6 +241,7 @@ class EnhancedChatProcessor:
             print(f"Error extracting from DOCX: {str(e)}")
             return []
 
+    
     def _split_text_into_chats(self, text: str) -> List[Dict[str, Any]]:
         """
         Split a text containing multiple chat transcripts into individual chats.
@@ -252,103 +253,113 @@ class EnhancedChatProcessor:
         MIN_LINES = 3  # Minimum number of lines to consider as valid chat
         MIN_CHARS = 50  # Minimum number of characters to consider as valid chat
         
-        # Focus on chat number patterns - match any number of digits
+        # FIXED: Updated patterns to handle multiple formats including yours
         chat_start_patterns = [
-            r"(?:^|\s)Chat\s+(?:ID\s*:?\s*)?(\d+)(?!\d)",  # Match "Chat 01271153" (any number of digits)
-            r"(?:^|\s)Chat\s*#\s*(\d+)(?!\d)",             # Match "Chat #01271153"
-            r"^[A-Z]{2,}\s*[:-]?\s*Chat\s+(\d+)(?!\d)",    # Match "TH: Chat 01271153"
-            r"^[A-Z]{2,}\s*[:-]?\s*Chat\s*#\s*(\d+)(?!\d)" # Match "TH: Chat #01271153"
+            r"(?:^|\n)\s*Chat\s*#?\s*(\d+)",                    # "Chat 01331292" or "Chat #01331292"
+            r"(?:^|\n)\s*Chat\s*:\s*(\d+)",                     # "Chat : 01331292"
+            r"(?:^|\n)\s*Chat\s+ID\s*:?\s*(\d+)",              # "Chat ID: 01331292"
+            r"(?:^|\n)[A-Z]{2,}\s*[:-]?\s*Chat\s*#?\s*(\d+)",  # "TH: Chat 01331292"
         ]
         
         # Create combined pattern
         combined_pattern = '|'.join(f"(?:{pattern})" for pattern in chat_start_patterns)
         
-        # Split by chat number patterns
-        segments = re.split(f"({combined_pattern})", text, flags=re.IGNORECASE | re.MULTILINE)
+        print(f"DEBUG: Looking for chat patterns in text")
+        print(f"DEBUG: Text length: {len(text)} characters")
+        print(f"DEBUG: First 300 chars: {text[:300]}")
         
-        # Filter out empty segments
-        segments = [segment for segment in segments if segment and not segment.isspace()]
+        # IMPORTANT: Use DOTALL flag to handle multiline content properly
+        matches = list(re.finditer(combined_pattern, text, re.IGNORECASE | re.MULTILINE))
         
-        # Process segments  
-        current_chat = ""
-        chat_counter = 0
-        is_header = False
+        print(f"DEBUG: Found {len(matches)} chat headers")
+        for i, match in enumerate(matches):
+            print(f"DEBUG: Match {i+1}: '{match.group().strip()}' at position {match.start()}-{match.end()}")
         
-        for i, segment in enumerate(segments):
-            # Check if segment is a chat boundary
-            if re.match(combined_pattern, segment, re.IGNORECASE):
-                # Process previous chat if it exists and meets minimum requirements
-                if current_chat.strip():
-                    lines = [line for line in current_chat.split('\n') if line.strip()]
-                    if len(lines) >= MIN_LINES and len(current_chat.strip()) >= MIN_CHARS:
-                        chat_id = self._extract_chat_id(current_chat) or f"Chat_{chat_counter}"
-                        timestamp = self._extract_timestamp(current_chat)
-                        processed_content = self._clean_and_process_chat(current_chat)
-                        
-                        if processed_content:
-                            chats.append({
-                                'id': chat_id,
-                                'content': current_chat,
-                                'timestamp': timestamp or datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'processed_content': processed_content
-                            })
-                            chat_counter += 1
-                
-                current_chat = segment
-                is_header = True
+        if not matches:
+            print("DEBUG: No chat headers found, treating entire text as single chat")
+            # If no chat headers found, treat entire text as one chat
+            processed_content = self._clean_and_process_chat(text)
+            if processed_content and len(processed_content.strip()) >= MIN_CHARS:
+                chats.append({
+                    'id': 'Chat_Single',
+                    'content': text,
+                    'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'processed_content': processed_content
+                })
+            return chats
+        
+        # Extract chat content between matches
+        for i, match in enumerate(matches):
+            start_pos = match.start()
+            
+            # Determine end position (start of next match or end of text)
+            if i + 1 < len(matches):
+                end_pos = matches[i + 1].start()
             else:
-                # If this is content following a header, or we're still building the first chat
-                if is_header or not current_chat:
-                    current_chat += segment
-                    is_header = False
-                else:
-                    # This is content not following a header, so it belongs to the current chat
-                    current_chat += segment
-        
-        # Process final chat
-        if current_chat.strip():
-            lines = [line for line in current_chat.split('\n') if line.strip()]
-            if len(lines) >= MIN_LINES and len(current_chat.strip()) >= MIN_CHARS:
-                chat_id = self._extract_chat_id(current_chat) or f"Chat_{chat_counter}"
-                timestamp = self._extract_timestamp(current_chat)
-                processed_content = self._clean_and_process_chat(current_chat)
+                end_pos = len(text)
+            
+            # Extract chat content
+            chat_content = text[start_pos:end_pos].strip()
+            
+            print(f"DEBUG: Processing chat {i+1}")
+            print(f"DEBUG: Content length: {len(chat_content)}")
+            print(f"DEBUG: First 100 chars: {chat_content[:100]}...")
+            
+            # Check if chat meets minimum requirements
+            lines = [line for line in chat_content.split('\n') if line.strip()]
+            if len(lines) >= MIN_LINES and len(chat_content.strip()) >= MIN_CHARS:
+                
+                # Extract chat ID from the match
+                chat_id = None
+                for group_num in range(1, match.lastindex + 1 if match.lastindex else 1):
+                    if match.group(group_num):
+                        chat_id = f"Chat_{match.group(group_num)}"
+                        break
+                
+                if not chat_id:
+                    chat_id = f"Chat_{i+1}"
+                
+                # Extract timestamp and process content
+                timestamp = self._extract_timestamp(chat_content)
+                processed_content = self._clean_and_process_chat(chat_content)
+                
+                print(f"DEBUG: Chat ID: {chat_id}")
+                print(f"DEBUG: Processed content length: {len(processed_content) if processed_content else 0}")
                 
                 if processed_content:
                     chats.append({
                         'id': chat_id,
-                        'content': current_chat,
+                        'content': chat_content,
                         'timestamp': timestamp or datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'processed_content': processed_content
                     })
+                    print(f"DEBUG: Successfully added chat {chat_id}")
+                else:
+                    print(f"DEBUG: Skipped chat {chat_id} - no valid processed content")
+            else:
+                print(f"DEBUG: Skipped chat {i+1} - insufficient content ({len(lines)} lines, {len(chat_content)} chars)")
         
+        print(f"DEBUG: Final result: {len(chats)} chats extracted")
         return chats
 
     def _extract_chat_id(self, chat_text: str) -> Optional[str]:
-        """Extract chat ID from chat text and detect/fix duplicated numbers."""
+        """Extract chat ID from chat text - Updated to handle multiple formats."""
         patterns = [
-            r"(?:^|\s)Chat\s+(?:ID\s*:?\s*)?(\d+)(?!\d)",  # Match "Chat 01271153"
-            r"(?:^|\s)Chat\s*#\s*(\d+)(?!\d)",             # Match "Chat #01271153"
-            r"^[A-Z]{2,}\s*[:-]?\s*Chat\s+(\d+)(?!\d)",    # Match "TH: Chat 01271153"
-            r"^[A-Z]{2,}\s*[:-]?\s*Chat\s*#\s*(\d+)(?!\d)" # Match "TH: Chat #01271153"
+            r"(?:^|\n)\s*Chat\s*#?\s*(\d+)",                    # "Chat 01331292" or "Chat #01331292"
+            r"(?:^|\n)\s*Chat\s*:\s*(\d+)",                     # "Chat : 01331292"
+            r"(?:^|\n)\s*Chat\s+ID\s*:?\s*(\d+)",              # "Chat ID: 01331292"
+            r"(?:^|\n)[A-Z]{2,}\s*[:-]?\s*Chat\s*#?\s*(\d+)",  # "TH: Chat 01331292"
         ]
         
         for pattern in patterns:
-            match = re.search(pattern, chat_text, re.IGNORECASE)
+            match = re.search(pattern, chat_text, re.IGNORECASE | re.MULTILINE)
             if match:
                 chat_id = match.group(1)
                 
-                # Check for duplicated numbers (common pattern in your data)
+                # Handle duplicated numbers (common in OCR/extraction errors)
                 if len(chat_id) >= 16:
-                    # Check if the first half equals the second half
                     half_len = len(chat_id) // 2
                     if chat_id[:half_len] == chat_id[half_len:2*half_len]:
-                        # Found a duplicate pattern, use just the first half
-                        chat_id = chat_id[:half_len]
-                    
-                    # Also check if the number is duplicated with slight differences
-                    # (common with OCR or text extraction errors)
-                    elif chat_id[:6] == chat_id[half_len:half_len+6]:
-                        # First few digits match, likely duplication
                         chat_id = chat_id[:half_len]
                 
                 return f"Chat_{chat_id}"
@@ -390,29 +401,38 @@ class EnhancedChatProcessor:
         return None
 
     def _clean_and_process_chat(self, chat_text: str) -> str:
-        """Clean and format chat content for analysis."""
+        """Clean and format chat content for analysis - Enhanced version."""
         lines = chat_text.split('\n')
         processed_lines = []
         has_valid_content = False
+        
+        # Enhanced speaker patterns to handle your specific format
         speaker_patterns = {
             'customer': [
-                r'^(?:Customer|Client|Visitor|User|Guest)',
+                r'^(?:Customer|Client|Visitor|User|Guest|[A-Z][a-z]+\s+[A-Z][a-z]+)',  # Names like "Chollasin Lawpiboolpipat"
                 r'^\(\d+[ms]\)\s*(?:Customer|Client|Visitor|User|Guest)',
-                r'^.*?(?:Customer|Client|Visitor|User|Guest)\s*:'
+                r'^.*?(?:Customer|Client|Visitor|User|Guest)\s*:',
+                r'^\d{2}/\d{2}/\d{4}\s+\d{1,2}:\d{2}\s+[ap]m\s*$',  # Timestamp lines
             ],
             'agent': [
-                r'^(?:Agent|Support|Assistant|Representative|Bot|Chatbot|Pepper)',
+                r'^(?:Agent|Support|Assistant|Representative|Bot|Chatbot|Pepper|Mae\s+T|System)',
                 r'^\(\d+[ms]\)\s*(?:Agent|Support|Assistant|Representative|Bot|Chatbot|Pepper)',
-                r'^.*?(?:Agent|Support|Assistant|Representative|Bot|Chatbot|Pepper)\s*:'
+                r'^.*?(?:Agent|Support|Assistant|Representative|Bot|Chatbot|Pepper)\s*:',
+                r'^[A-Z]\s*$',  # Single letter lines like "S"
             ]
         }
 
-        # Simplified skip patterns - only skip non-conversation content
+        # Skip patterns - only skip true non-conversation content
         skip_patterns = [
             r'^\s*\{ChatWindowButton:',
             r'^\s*Page \d+ of \d+',
             r'^\s*Report generated',
-            r'^\s*[-=*_]{3,}\s*$'  # Separator lines
+            r'^\s*[-=*_]{3,}\s*$',  # Separator lines like *************
+            r'^\s*Chat\s*#?\s*\d+\s*$',  # Chat header lines
+            r'^\s*Chat Started:',
+            r'^\s*This chat conversation was',
+            r'^\s*Thursday \d+ June\s*$',
+            r'^\s*Monday \d+ June\s*$',
         ]
 
         skip_pattern = '|'.join(skip_patterns)
@@ -429,15 +449,25 @@ class EnhancedChatProcessor:
 
             # Check for any type of message
             is_message = False
-            # Check for customer messages
+            original_line = line
+            
+            # Check for customer messages (including names)
             for pattern in speaker_patterns['customer']:
                 if re.match(pattern, line, re.IGNORECASE):
                     is_message = True
                     has_valid_content = True
                     has_conversation = True
-                    # Clean up the line
+                    
+                    # Clean up the line but preserve speaker identity
                     line = re.sub(r'^\(\d+[ms]\)\s*', '', line)  # Remove timestamp
-                    line = re.sub(r'^.*?(?:Customer|Client|Visitor|User|Guest)\s*:', 'Customer:', line, flags=re.IGNORECASE)
+                    
+                    # If it's a name pattern, keep the name
+                    if re.match(r'^[A-Z][a-z]+\s+[A-Z][a-z]+', line):
+                        # It's a customer name - keep as is
+                        pass
+                    else:
+                        # Standard customer pattern
+                        line = re.sub(r'^.*?(?:Customer|Client|Visitor|User|Guest)\s*:', 'Customer:', line, flags=re.IGNORECASE)
                     break
 
             # Check for agent/bot messages
@@ -447,23 +477,35 @@ class EnhancedChatProcessor:
                         is_message = True
                         has_valid_content = True
                         has_conversation = True
+                        
                         # Clean up the line
                         line = re.sub(r'^\(\d+[ms]\)\s*', '', line)  # Remove timestamp
-                        # Preserve the original speaker type (Bot/Agent)
-                        if re.match(r'^.*?(Bot|Chatbot|Pepper)\s*:', line, re.IGNORECASE):
-                            line = re.sub(r'^.*?(Bot|Chatbot|Pepper)\s*:', r'\1:', line, flags=re.IGNORECASE)
+                        
+                        # Preserve specific agent names like "Mae T"
+                        if re.match(r'^Mae\s+T', line, re.IGNORECASE):
+                            line = re.sub(r'^Mae\s+T\s*', 'Mae T: ', line, flags=re.IGNORECASE)
+                        elif re.match(r'^System', line, re.IGNORECASE):
+                            line = re.sub(r'^System\s*', 'System: ', line, flags=re.IGNORECASE)
+                        elif re.match(r'^[A-Z]\s*$', line):
+                            line = 'System: ' + line  # Single letters become system messages
                         else:
+                            # Generic agent pattern
                             line = re.sub(r'^.*?(?:Agent|Support|Assistant|Representative)\s*:', 'Agent:', line, flags=re.IGNORECASE)
                         break
 
             if is_message:
                 processed_lines.append(line)
-            elif line.strip():  # Add non-empty lines that might be continuation of messages
+            elif line.strip() and not re.match(skip_pattern, line, re.IGNORECASE):
+                # Add non-empty lines that might be continuation of messages
                 processed_lines.append(line)
 
         # Return content if it has any conversation
-        if has_valid_content and has_conversation:
-            return '\n'.join(processed_lines)
+        if has_valid_content and has_conversation and len(processed_lines) >= 3:
+            result = '\n'.join(processed_lines)
+            print(f"DEBUG: Processed chat content: {len(result)} chars, {len(processed_lines)} lines")
+            return result
+        
+        print(f"DEBUG: Chat rejected: valid_content={has_valid_content}, conversation={has_conversation}, lines={len(processed_lines)}")
         return ''
 
 def cleanup_session_state():
