@@ -241,136 +241,169 @@ class EnhancedChatProcessor:
             print(f"Error extracting from DOCX: {str(e)}")
             return []
 
-    
-    def _split_text_into_chats(self, text: str) -> List[Dict[str, Any]]:
+    def _extract_conversation_id_and_type(self, header_text: str) -> tuple[Optional[str], str]:
         """
-        Split a text containing multiple chat transcripts into individual chats.
-        Enhanced to better handle various chat formats and language variations.
+        Extract conversation ID and determine if it's a Chat or Case.
+        Returns: (conversation_id, conversation_type)
         """
-        chats = []
-        
-        # Define minimum content requirements
-        MIN_LINES = 3  # Minimum number of lines to consider as valid chat
-        MIN_CHARS = 50  # Minimum number of characters to consider as valid chat
-        
-        # FIXED: Updated patterns to handle multiple formats including yours
-        chat_start_patterns = [
-            r"(?:^|\n)\s*Chat\s*#?\s*(\d+)",                    # "Chat 01331292" or "Chat #01331292"
-            r"(?:^|\n)\s*Chat\s*:\s*(\d+)",                     # "Chat : 01331292"
-            r"(?:^|\n)\s*Chat\s+ID\s*:?\s*(\d+)",              # "Chat ID: 01331292"
-            r"(?:^|\n)[A-Z]{2,}\s*[:-]?\s*Chat\s*#?\s*(\d+)",  # "TH: Chat 01331292"
+        # Chat patterns
+        chat_patterns = [
+            r"Chat\s*#?\s*(\d+)",                    # "Chat 01331292" or "Chat #01331292"
+            r"Chat\s*:\s*(\d+)",                     # "Chat : 01331292"
+            r"Chat\s+ID\s*:?\s*(\d+)",              # "Chat ID: 01331292"
+            r"[A-Z]{2,}\s*[:-]?\s*Chat\s*#?\s*(\d+)",  # "TH: Chat 01331292"
         ]
         
-        # Create combined pattern
-        combined_pattern = '|'.join(f"(?:{pattern})" for pattern in chat_start_patterns)
-        
-        print(f"DEBUG: Looking for chat patterns in text")
-        print(f"DEBUG: Text length: {len(text)} characters")
-        print(f"DEBUG: First 300 chars: {text[:300]}")
-        
-        # IMPORTANT: Use DOTALL flag to handle multiline content properly
-        matches = list(re.finditer(combined_pattern, text, re.IGNORECASE | re.MULTILINE))
-        
-        print(f"DEBUG: Found {len(matches)} chat headers")
-        for i, match in enumerate(matches):
-            print(f"DEBUG: Match {i+1}: '{match.group().strip()}' at position {match.start()}-{match.end()}")
-        
-        if not matches:
-            print("DEBUG: No chat headers found, treating entire text as single chat")
-            # If no chat headers found, treat entire text as one chat
-            processed_content = self._clean_and_process_chat(text)
-            if processed_content and len(processed_content.strip()) >= MIN_CHARS:
-                chats.append({
-                    'id': 'Chat_Single',
-                    'content': text,
-                    'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'processed_content': processed_content
-                })
-            return chats
-        
-        # Extract chat content between matches
-        for i, match in enumerate(matches):
-            start_pos = match.start()
-            
-            # Determine end position (start of next match or end of text)
-            if i + 1 < len(matches):
-                end_pos = matches[i + 1].start()
-            else:
-                end_pos = len(text)
-            
-            # Extract chat content
-            chat_content = text[start_pos:end_pos].strip()
-            
-            print(f"DEBUG: Processing chat {i+1}")
-            print(f"DEBUG: Content length: {len(chat_content)}")
-            print(f"DEBUG: First 100 chars: {chat_content[:100]}...")
-            
-            # Check if chat meets minimum requirements
-            lines = [line for line in chat_content.split('\n') if line.strip()]
-            if len(lines) >= MIN_LINES and len(chat_content.strip()) >= MIN_CHARS:
-                
-                # Extract chat ID from the match
-                chat_id = None
-                for group_num in range(1, match.lastindex + 1 if match.lastindex else 1):
-                    if match.group(group_num):
-                        chat_id = f"Chat_{match.group(group_num)}"
-                        break
-                
-                if not chat_id:
-                    chat_id = f"Chat_{i+1}"
-                
-                # Extract timestamp and process content
-                timestamp = self._extract_timestamp(chat_content)
-                processed_content = self._clean_and_process_chat(chat_content)
-                
-                print(f"DEBUG: Chat ID: {chat_id}")
-                print(f"DEBUG: Processed content length: {len(processed_content) if processed_content else 0}")
-                
-                if processed_content:
-                    chats.append({
-                        'id': chat_id,
-                        'content': chat_content,
-                        'timestamp': timestamp or datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'processed_content': processed_content
-                    })
-                    print(f"DEBUG: Successfully added chat {chat_id}")
-                else:
-                    print(f"DEBUG: Skipped chat {chat_id} - no valid processed content")
-            else:
-                print(f"DEBUG: Skipped chat {i+1} - insufficient content ({len(lines)} lines, {len(chat_content)} chars)")
-        
-        print(f"DEBUG: Final result: {len(chats)} chats extracted")
-        return chats
-
-    def _extract_chat_id(self, chat_text: str) -> Optional[str]:
-        """Extract chat ID from chat text - Updated to handle multiple formats."""
-        patterns = [
-            r"(?:^|\n)\s*Chat\s*#?\s*(\d+)",                    # "Chat 01331292" or "Chat #01331292"
-            r"(?:^|\n)\s*Chat\s*:\s*(\d+)",                     # "Chat : 01331292"
-            r"(?:^|\n)\s*Chat\s+ID\s*:?\s*(\d+)",              # "Chat ID: 01331292"
-            r"(?:^|\n)[A-Z]{2,}\s*[:-]?\s*Chat\s*#?\s*(\d+)",  # "TH: Chat 01331292"
+        # Case patterns
+        case_patterns = [
+            r"Case\s+ID\s+CT(\d+)",                  # "Case ID CT70707"
+            r"Case\s+(\d+)",                         # "Case 55254523"
+            r"Case\s*#\s*(\d+)",                     # "Case #55254523"
+            r"Case\s*:\s*(\d+)",                     # "Case : 55254523"
         ]
         
-        for pattern in patterns:
-            match = re.search(pattern, chat_text, re.IGNORECASE | re.MULTILINE)
+        # Check for Chat patterns
+        for pattern in chat_patterns:
+            match = re.search(pattern, header_text, re.IGNORECASE)
             if match:
                 chat_id = match.group(1)
                 
-                # Handle duplicated numbers (common in OCR/extraction errors)
+                # Handle duplicated numbers
                 if len(chat_id) >= 16:
                     half_len = len(chat_id) // 2
                     if chat_id[:half_len] == chat_id[half_len:2*half_len]:
                         chat_id = chat_id[:half_len]
                 
-                return f"Chat_{chat_id}"
+                return f"Chat_{chat_id}", "chat"
         
-        # If no valid chat ID found, generate a hash from the content
-        content_sample = chat_text[:100].strip()
-        if content_sample:
-            hash_obj = hashlib.md5(content_sample.encode())
-            return f"Chat_{hash_obj.hexdigest()[:8]}"
+        # Check for Case patterns
+        for pattern in case_patterns:
+            match = re.search(pattern, header_text, re.IGNORECASE)
+            if match:
+                case_id = match.group(1)
+                
+                # Handle duplicated numbers
+                if len(case_id) >= 16:
+                    half_len = len(case_id) // 2
+                    if case_id[:half_len] == case_id[half_len:2*half_len]:
+                        case_id = case_id[:half_len]
+                
+                return f"Case_{case_id}", "case"
         
-        return None
+        # If no match found, generate a hash
+        hash_obj = hashlib.md5(header_text.encode())
+        return f"Unknown_{hash_obj.hexdigest()[:8]}", "unknown"
+    
+    def _split_text_into_chats(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Split a text containing multiple chat/case transcripts into individual conversations.
+        Now supports both Chat and Case formats.
+        """
+        conversations = []
+        
+        # Define minimum content requirements
+        MIN_LINES = 3
+        MIN_CHARS = 50
+        
+        # UPDATED: Support both Chat and Case formats
+        conversation_start_patterns = [
+            # Chat patterns
+            r"(?:^|\n)\s*Chat\s*#?\s*(\d+)",                    # "Chat 01331292" or "Chat #01331292"
+            r"(?:^|\n)\s*Chat\s*:\s*(\d+)",                     # "Chat : 01331292"
+            r"(?:^|\n)\s*Chat\s+ID\s*:?\s*(\d+)",              # "Chat ID: 01331292"
+            r"(?:^|\n)[A-Z]{2,}\s*[:-]?\s*Chat\s*#?\s*(\d+)",  # "TH: Chat 01331292"
+            
+            # Case patterns (NEW)
+            r"(?:^|\n)\s*Case\s+ID\s+CT(\d+)",                  # "Case ID CT70707"
+            r"(?:^|\n)\s*Case\s+(\d+)",                         # "Case 55254523"
+            r"(?:^|\n)\s*Case\s*#\s*(\d+)",                     # "Case #55254523"
+            r"(?:^|\n)\s*Case\s*:\s*(\d+)",                     # "Case : 55254523"
+        ]
+        
+        # Create combined pattern
+        combined_pattern = '|'.join(f"(?:{pattern})" for pattern in conversation_start_patterns)
+        
+        print(f"DEBUG: Looking for Chat/Case patterns in text")
+        print(f"DEBUG: Text length: {len(text)} characters")
+        print(f"DEBUG: First 300 chars: {text[:300]}")
+        
+        # Find all conversation headers
+        matches = list(re.finditer(combined_pattern, text, re.IGNORECASE | re.MULTILINE))
+        
+        print(f"DEBUG: Found {len(matches)} conversation headers")
+        for i, match in enumerate(matches):
+            header_text = match.group().strip()
+            print(f"DEBUG: Match {i+1}: '{header_text}' at position {match.start()}-{match.end()}")
+        
+        if not matches:
+            print("DEBUG: No conversation headers found, treating entire text as single conversation")
+            # If no headers found, treat entire text as one conversation
+            processed_content = self._clean_and_process_chat(text)
+            if processed_content and len(processed_content.strip()) >= MIN_CHARS:
+                conversations.append({
+                    'id': 'Conversation_Single',
+                    'type': 'unknown',
+                    'content': text,
+                    'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'processed_content': processed_content
+                })
+            return conversations
+        
+        # Extract conversation content between matches
+        for i, match in enumerate(matches):
+            start_pos = match.start()
+            
+            # Determine end position
+            if i + 1 < len(matches):
+                end_pos = matches[i + 1].start()
+            else:
+                end_pos = len(text)
+            
+            # Extract conversation content
+            conversation_content = text[start_pos:end_pos].strip()
+            
+            print(f"DEBUG: Processing conversation {i+1}")
+            print(f"DEBUG: Content length: {len(conversation_content)}")
+            print(f"DEBUG: First 100 chars: {conversation_content[:100]}...")
+            
+            # Check if conversation meets minimum requirements
+            lines = [line for line in conversation_content.split('\n') if line.strip()]
+            if len(lines) >= MIN_LINES and len(conversation_content.strip()) >= MIN_CHARS:
+                
+                # Extract conversation ID and determine type
+                conversation_id, conversation_type = self._extract_conversation_id_and_type(match.group().strip())
+                
+                if not conversation_id:
+                    conversation_id = f"{conversation_type.title()}_{i+1}"
+                
+                # Extract timestamp and process content
+                timestamp = self._extract_timestamp(conversation_content)
+                processed_content = self._clean_and_process_chat(conversation_content)
+                
+                print(f"DEBUG: Conversation ID: {conversation_id}, Type: {conversation_type}")
+                print(f"DEBUG: Processed content length: {len(processed_content) if processed_content else 0}")
+                
+                if processed_content:
+                    conversations.append({
+                        'id': conversation_id,
+                        'type': conversation_type,
+                        'content': conversation_content,
+                        'timestamp': timestamp or datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'processed_content': processed_content
+                    })
+                    print(f"DEBUG: Successfully added {conversation_type} {conversation_id}")
+                else:
+                    print(f"DEBUG: Skipped {conversation_type} {conversation_id} - no valid processed content")
+            else:
+                print(f"DEBUG: Skipped conversation {i+1} - insufficient content ({len(lines)} lines, {len(conversation_content)} chars)")
+        
+        print(f"DEBUG: Final result: {len(conversations)} conversations extracted")
+        return conversations
+
+    def _extract_chat_id(self, chat_text: str) -> Optional[str]:
+        """Extract chat/case ID from text - Updated for backward compatibility."""
+        conversation_id, _ = self._extract_conversation_id_and_type(chat_text)
+        return conversation_id
 
     def _extract_timestamp(self, chat_text: str) -> Optional[str]:
         """Extract timestamp from chat text."""
