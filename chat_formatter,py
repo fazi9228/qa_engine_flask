@@ -1,0 +1,105 @@
+# chat_formatter.py
+import re
+
+def format_transcript_for_ai(raw_transcript: str) -> str:
+    """
+    Takes a raw, messy chat transcript and formats it into a clean,
+    structured dialogue for AI analysis.
+
+    This function is designed to handle multiple inconsistent formats, including:
+    - Speaker and timestamp on the same line.
+    - Speaker and timestamp split across two or three lines.
+    - Old formats using colons (e.g., "Agent:").
+    """
+    
+    # === 1. Pre-processing: Normalize inconsistent line breaks ===
+    # This is the most critical step. It joins multi-line speaker/timestamp
+    # blocks into a single, standardized line.
+    original_lines = raw_transcript.split('\n')
+    normalized_lines = []
+    i = 0
+    while i < len(original_lines):
+        line = original_lines[i]
+        
+        # Look ahead for the bullet point '•' which signals a timestamp
+        # Case 1: 3-line split (Name \n • \n timestamp)
+        if (i + 2) < len(original_lines) and \
+           original_lines[i+1].strip() == '•' and \
+           re.match(r'\d{2}/\d{2}/\d{4}', original_lines[i+2].strip()):
+            
+            combined_line = f"{line.strip()} • {original_lines[i+2].strip()}"
+            normalized_lines.append(combined_line)
+            i += 3 # Advance index by 3 to skip the lines we just combined
+            
+        # Case 2: 2-line split (Name \n • timestamp)
+        elif (i + 1) < len(original_lines) and \
+             original_lines[i+1].strip().startswith('•'):
+             
+            combined_line = f"{line.strip()} {original_lines[i+1].strip()}"
+            normalized_lines.append(combined_line)
+            i += 2 # Advance index by 2
+            
+        else:
+            # Not a multi-line block, just add the line
+            normalized_lines.append(line)
+            i += 1
+            
+    # === 2. Main Parsing: Process the now-normalized lines ===
+    
+    # Define strict patterns for speaker identification
+    speaker_patterns = {
+        'customer': r'^(Guest)\s*•',
+        # Matches any name (e.g., "Kang A", "Chen L", "Pepper English") followed by '•'
+        'agent': r'^([A-Za-z\s]+)\s*•', 
+    }
+    
+    skip_patterns = [
+        r'^\s*agent joined the conversation',
+        r'^\s*automated process',
+        r'^.*(left|joined) the conversation',
+        r'^\s*a transfer request was sent',
+        r'^\s*preview:',
+        r'^\s*auto-response component',
+        r'^\s*live chat experience',
+    ]
+
+    # For backward compatibility with old formats (e.g., "Support:")
+    old_format_speaker_regex = re.compile(r'^((?:Customer|Client|Visitor|User|Guest|Agent|Support|Bot|Pepper)+):')
+
+    customer_regex = re.compile(speaker_patterns['customer'], re.IGNORECASE)
+    agent_regex = re.compile(speaker_patterns['agent'], re.IGNORECASE)
+    skip_regex = re.compile('|'.join(skip_patterns), re.IGNORECASE)
+
+    processed_dialogue = []
+    current_speaker = None
+    
+    for line in normalized_lines:
+        line = line.strip()
+        if not line or skip_regex.match(line):
+            continue
+
+        # Try to match the line against speaker patterns
+        cust_match = customer_regex.match(line)
+        agent_match = agent_regex.match(line)
+        old_match = old_format_speaker_regex.match(line)
+        
+        if cust_match:
+            current_speaker = "Customer"
+        elif agent_match:
+            # We identify it's an agent, but we don't use the agent's name to keep it generic
+            current_speaker = "Agent"
+        elif old_match:
+            speaker_tag = old_match.group(1).lower()
+            if speaker_tag in ['agent', 'support', 'bot', 'pepper']:
+                current_speaker = "Agent"
+            else:
+                current_speaker = "Customer"
+            # The line itself is the message for old formats
+            processed_dialogue.append(line)
+            
+        else:
+            # If it's not a speaker line, it must be a message
+            if current_speaker:
+                processed_dialogue.append(f"{current_speaker}: {line}")
+
+    return '\n'.join(processed_dialogue)
