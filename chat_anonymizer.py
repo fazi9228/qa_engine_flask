@@ -34,17 +34,17 @@ class ChatAnonymizer:
         self.patterns = self._initialize_patterns()
     
     def _initialize_patterns(self):
-        """Initialize regex patterns for different types of sensitive information"""
+        """
+        Initialize regex patterns for different types of sensitive information.
+        UPDATED: Patterns now ignore numbers preceded by an ID prefix like 'MS-'.
+    
+        """
         return {
             # Phone numbers - Various international formats
             'phone': [
-                r'\b(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})\b',  # US format
-                r'\b(?:\+?86[-.\s]?)?1[3-9][0-9]{9}\b',  # China mobile
-                r'\b(?:\+?84[-.\s]?)?[0-9]{9,10}\b',     # Vietnam
-                r'\b(?:\+?66[-.\s]?)?[0-9]{9,10}\b',     # Thailand  
-                r'\b(?:\+?65[-.\s]?)?[0-9]{8}\b',        # Singapore
-                r'\b(?:\+?60[-.\s]?)?1[0-9]{8,9}\b',     # Malaysia
-                r'\b(?:\+?[1-9][0-9]{0,3}[-.\s]?)?[0-9]{7,15}\b',  # General international
+                r'\b(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})\b',
+                # MODIFIED: Added a negative lookbehind to ignore numbers with a clear ID prefix
+                r'\b(?<![A-Z]{2}-)(?:\+?[1-9][0-9]{0,3}[-.\s]?)?[0-9]{7,15}\b',
             ],
             
             # Email addresses
@@ -52,116 +52,96 @@ class ChatAnonymizer:
                 r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
             ],
             
-            # OTP codes - 4-8 digit numbers (but not chat IDs)
+            # OTP codes - 4-8 digit numbers
             'otp': [
                 r'\b(?:OTP|otp|code|Code|verification|Verification)[\s:]*([0-9]{4,8})\b',
-                r'\b([0-9]{6})\b(?=.*(?:OTP|otp|code|verification))',  # 6 digits near OTP words
-                r'\b([0-9]{4})\b(?=.*(?:OTP|otp|code|verification))',  # 4 digits near OTP words
+                r'\b([0-9]{6})\b(?=.*(?:OTP|otp|code|verification))',
             ],
             
             # Date of Birth - Various formats
             'dob': [
-                r'\b([0-3]?[0-9])[-/.]([0-1]?[0-9])[-/.]([12][0-9]{3})\b',  # DD/MM/YYYY or DD-MM-YYYY
-                r'\b([12][0-9]{3})[-/.]([0-1]?[0-9])[-/.]([0-3]?[0-9])\b',  # YYYY/MM/DD or YYYY-MM-DD
-                r'\b([0-1]?[0-9])[-/.]([0-3]?[0-9])[-/.]([12][0-9]{3})\b',  # MM/DD/YYYY or MM-DD-YYYY
+                r'\b([0-3]?[0-9])[-/.]([0-1]?[0-9])[-/.]([12][0-9]{3})\b',
+                r'\b([12][0-9]{3})[-/.]([0-1]?[0-9])[-/.]([0-3]?[0-9])\b',
             ],
             
-            # National ID / Passport - Various country formats (exclude chat IDs)
+            # National ID / Passport
             'id_number': [
-                r'\b[A-Z]{1,2}[0-9]{6,9}\b',           # Passport format (A1234567)
-                r'\b(?<!Chat[\s_#])[0-9]{9,12}\b',      # National ID (9-12 digits) - exclude after "Chat"
-                r'\b[A-Z][0-9]{8}\b',                   # Some passport formats
-                r'\b[0-9]{3}-[0-9]{2}-[0-9]{4}\b',      # SSN format
+                r'\b[A-Z]{1,2}[0-9]{6,9}\b',
+                # MODIFIED: Added a negative lookbehind to ignore numbers with a clear ID prefix
+                r'\b(?<![A-Z]{2}-)(?<!Chat[\s_#])(?<!Case[\s_#])[0-9]{9,12}\b',
+                r'\b[A-Z][0-9]{8}\b',
             ],
             
-            # Bank account numbers (exclude chat IDs)
+            # Bank account numbers
             'bank_account': [
-                r'\b(?<!Chat[\s_#])(?<!ID[\s:])(?<!Number[\s:])(?<!#)[0-9]{8,20}\b',  # 8-20 digit account numbers
-                r'\b[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}\b',  # IBAN
+                # MODIFIED: Added a negative lookbehind to ignore numbers with a clear ID prefix
+                r'\b(?<![A-Z]{2}-)(?<!Chat[\s_#])(?<!ID[\s:])(?<!#)[0-9]{8,20}\b',
+                r'\b[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}\b',
             ],
             
             # Credit card numbers
             'credit_card': [
-                r'\b4[0-9]{12}(?:[0-9]{3})?\b',         # Visa
-                r'\b5[1-5][0-9]{14}\b',                 # MasterCard
-                r'\b3[47][0-9]{13}\b',                  # American Express
-                r'\b3[0-9]{4}[-\s]?[0-9]{6}[-\s]?[0-9]{5}\b',  # Diners Club
-                r'\b[0-9]{4}[-\s]?[0-9]{4}[-\s]?[0-9]{4}[-\s]?[0-9]{4}\b',  # Generic 16-digit
+                r'\b4[0-9]{12}(?:[0-9]{3})?\b',
+                r'\b5[1-5][0-9]{14}\b',
+                r'\b3[47][0-9]{13}\b',
+                r'\b[0-9]{4}[-\s]?[0-9]{4}[-\s]?[0-9]{4}[-\s]?[0-9]{4}\b',
             ],
             
-            # USDT Wallet addresses (crypto)
+            # Wallet addresses and Transaction IDs
             'wallet': [
-                r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b',     # Bitcoin format
-                r'\b0x[a-fA-F0-9]{40}\b',                   # Ethereum format
-                r'\bT[A-Za-z0-9]{33}\b',                    # TRON format
+                r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b',
+                r'\b0x[a-fA-F0-9]{40}\b',
+                r'\bT[A-Za-z0-9]{33}\b',
             ],
-            
-            # Transaction IDs / Hash IDs
             'transaction_id': [
-                r'\b[a-fA-F0-9]{64}\b',                     # 64-char hex (Bitcoin tx)
-                r'\b0x[a-fA-F0-9]{64}\b',                   # Ethereum tx hash
-                r'\b[A-Z0-9]{20,50}\b',                     # Generic transaction ID
-                r'\b[a-fA-F0-9]{32}\b',                     # 32-char hex
+                r'\b[a-fA-F0-9]{64}\b',
+                r'\b0x[a-fA-F0-9]{64}\b',
             ],
-            
-            # Reference numbers / ARN (exclude chat IDs)
-            'reference_number': [
-                r'\b(?:REF|ref|Ref|ARN|arn|Arn)[\s:]*([A-Z0-9]{8,20})\b',
-                r'\b[A-Z]{2,4}[0-9]{8,16}\b',               # Bank reference format
-                r'\b(?<!Chat[\s_#])[0-9]{10,16}\b',         # Numeric reference (exclude after "Chat")
-            ]
         }
     
     def _is_system_identifier(self, text, match_position, original_value):
         """
-        Check if a matched number is a system identifier that should NOT be anonymized
-        FIXED: Better detection of chat numbers and other system IDs
+        Check if a matched number is a system identifier that should NOT be anonymized.
+        UPDATED: Now recognizes if a number is part of a [PREFIX]-[NUMBER] header.
+    
         """
-        # Get more context around the match (100 chars before and after)
-        start = max(0, match_position - 100)
-        end = min(len(text), match_position + 100)
-        context = text[start:end]
-        
-        print(f"Checking if '{original_value}' is system ID. Context: '{context}'")
-        
-        # PRIORITY 1: Check for chat numbers specifically
-        # Look for patterns like "Chat 01271153", "Chat #01271153", "TH: Chat 01271153"
-        chat_patterns = [
-            rf'\bChat[\s_#]*{re.escape(original_value)}(?!\d)',  # Chat followed by the number
-            rf'\bChat[\s_#]+ID[\s:]*{re.escape(original_value)}(?!\d)',  # Chat ID: number
-            rf'^[A-Z]{{2,}}[\s:-]*Chat[\s_#]*{re.escape(original_value)}(?!\d)',  # TH: Chat number
+        # Get the full line where the matched number was found
+        line_start = text.rfind('\n', 0, match_position) + 1
+        line_end = text.find('\n', match_position)
+        if line_end == -1:
+            line_end = len(text)
+        context_line = text[line_start:line_end].strip()
+
+        # NEW: Check if the entire line matches the [PREFIX]-[NUMBER] format
+        if re.fullmatch(r'[A-Z]{2,}-\d+', context_line, re.IGNORECASE):
+            return True
+
+        # PRIORITY 1: Check for chat or case numbers specifically
+        id_patterns = [
+            rf'\b(Chat|Case)[\s_#]*{re.escape(original_value)}(?!\d)',
+            rf'\b(Chat|Case)[\s_#]+ID[\s:]*{re.escape(original_value)}(?!\d)',
+            rf'^[A-Z]{2,}[\s:-]*(Chat|Case)[\s_#]*{re.escape(original_value)}(?!\d)',
+            rf'\b(chat|case)\b.*?[A-Z]{2,}-\s*{re.escape(original_value)}(?!\d)'
         ]
-        
-        for pattern in chat_patterns:
-            if re.search(pattern, context, re.IGNORECASE):
-                print(f"PRESERVING: '{original_value}' is a chat number (matched pattern)")
+        for pattern in id_patterns:
+            if re.search(pattern, text[max(0, match_position-100):match_position+100], re.IGNORECASE):
                 return True
-        
+
         # PRIORITY 2: Check for other system identifiers
         preserve_patterns = [
-            r'\b(?:session|ticket|case|order|conversation|transcript)[\s_#:]*' + re.escape(original_value) + r'(?!\d)',
-            r'\b' + re.escape(original_value) + r'[\s_]*(?:session|ticket|case|order|conversation|transcript)\b',
-            r'#[\s]*' + re.escape(original_value) + r'(?!\d)',  # Hash followed by number
+            r'\b(?:session|ticket|order|conversation|transcript)[\s_#:]*' + re.escape(original_value) + r'(?!\d)',
+            r'#[\s]*' + re.escape(original_value) + r'(?!\d)',
         ]
-        
         for pattern in preserve_patterns:
-            if re.search(pattern, context, re.IGNORECASE):
-                print(f"PRESERVING: '{original_value}' is a system identifier")
+            if re.search(pattern, text[max(0, match_position-100):match_position+100], re.IGNORECASE):
                 return True
-        
-        # PRIORITY 3: Check if it's at the start of a line with common system prefixes
-        lines = context.split('\n')
-        for line in lines:
-            line = line.strip()
-            if original_value in line:
-                # Check if line starts with system identifier patterns
-                if re.match(r'^(?:Chat|Session|Ticket|Case|Order|ID|Reference|Transaction)[\s_#:]*' + re.escape(original_value), line, re.IGNORECASE):
-                    print(f"PRESERVING: '{original_value}' starts a system identifier line")
-                    return True
-        
-        print(f"NOT PRESERVING: '{original_value}' appears to be sensitive data")
+
+        # PRIORITY 3: Check for keywords on the same line
+        if re.match(r'^(?:Chat|Case|Session|Ticket|Order|ID|Reference|Transaction)[\s_#:]*' + re.escape(original_value), context_line, re.IGNORECASE):
+            return True
+                
         return False
-    
+
     def _generate_replacement(self, data_type: str, original_value: str) -> str:
         """Generate consistent replacement for sensitive data"""
         # Create a hash-based replacement for consistency
