@@ -1,513 +1,437 @@
-import re
-import io
-import os
-import hashlib
-import datetime
-from typing import List, Dict, Any, Optional
-import time
-import tempfile
-import glob
+import json
+from datetime import datetime
+import concurrent.futures
+from knowledge_base import KnowledgeBase
+from chat_formatter import format_transcript_for_ai
 
-# Try to import file handling libraries
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
+# Import utilities from utils.py
+from utils import (
+    initialize_anthropic_client, 
+    initialize_openai_client, 
+    parse_json_response, 
+    detect_language,
+    detect_language_cached,
+    load_prompt_template,
+    load_evaluation_rules
+)
 
-try:
-    import PyPDF2
-except ImportError:
-    PyPDF2 = None
+# Function to analyze a transcript with cultural considerations
+def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_template_path="QA_prompt.md", model_provider="anthropic", model_name=None):
+    """
+    Analyze a chat transcript using AI models with proper error handling for Flask
+   
+    """
+    try:
+        # === NEW: Add the formatting step right at the beginning ===
+        formatted_transcript = format_transcript_for_ai(transcript)
+        # ==========================================================
 
-try:
-    import docx
-except ImportError:
-    docx = None
+        # Set default model name if not provided
+        if not model_name:
+            if model_provider == "anthropic":
+                model_name = "claude-3-7-sonnet-20250219"
+            elif model_provider == "openai":
+                model_name = "gpt-4o"
 
-class EnhancedChatProcessor:
-    """Enhanced processor for extracting and parsing chat transcripts from various file formats"""
+        # Use cached language detection on the ORIGINAL transcript if needed,
+        # but use the FORMATTED transcript for the main analysis.
+        text_sample = transcript[:200]
+        _, lang_name = detect_language_cached(text_sample, model_provider)
 
-    def extract_chats_from_file(self, uploaded_file):
-        """
-        Extract chats from uploaded file based on file type
-        
-        Args:
-        uploaded_file: The uploaded file object (BytesIO with .name attribute or file-like object)
-        
-        Returns:
-        List of chat dictionaries
-        """
-        try:
-            # Handle both file path strings and file objects
-            if hasattr(uploaded_file, 'name'):
-                filename = uploaded_file.name
-            elif hasattr(uploaded_file, 'filename'):
-                filename = uploaded_file.filename
-            else:
-                raise ValueError("File object must have 'name' or 'filename' attribute")
-                
-            file_extension = filename.split('.')[-1].lower()
-            print(f"Processing file: {filename}, Type: {file_extension}")
+        # Extract parameters and build list
+        parameters_list = ""
+        for param in rules["parameters"]:
+            parameters_list += f"- {param['name']}: {param['description']}\n"
+
+        # Extract scoring scale information
+        scale_max = 100
+        if "scoring_system" in rules and "score_scale" in rules["scoring_system"]:
+            scale_max = rules["scoring_system"]["score_scale"]["max"]
+
+        # Get scoring system info
+        scoring_info = ""
+        if "scoring_system" in rules and "quality_levels" in rules["scoring_system"]:
+            scoring_info = "Use the following scoring scale:\n"
+            for level in rules["scoring_system"]["quality_levels"]:
+                scoring_info += f"- {level['name']} ({level['range']['min']}-{level['range']['max']}): {level['description']}\n"
+
+        # Load prompt template
+        prompt_template = load_prompt_template(prompt_template_path)
+        if not prompt_template:
+            print(f"Error: Could not load prompt template from {prompt_template_path}")
+            return None
+
+        # Prepare KB Context with clearer instructions
+        kb_context = "\n\n## Internal Knowledge Base Guidance:\n"
+        kb_context += "The following are standard answers from our knowledge base for common questions. "
+        kb_context += "Only evaluate Knowledge Base adherence when customer questions clearly match KB content. "
+        kb_context += "For questions not covered in the KB, the agent should use their expertise appropriately. "
+        kb_context += "Focus on identifying contradictions with KB rather than expecting exact matches.\n\n"
+
+        kb_qa_pairs = kb.qa_pairs.get("qa_pairs", [])
+        if kb_qa_pairs:
+            for i, qa_pair in enumerate(kb_qa_pairs[:20]):  # Limit to 20 entries
+                kb_context += f"Q: {qa_pair.get('question', '')}\n"
+                kb_context += f"A: {qa_pair.get('answer', '')}\n"
+                kb_context += f"Category: {qa_pair.get('category', 'General')}\n\n"
+        else:
+            kb_context += "The knowledge base is currently empty. Evaluate based on general accuracy and procedures.\n"
+
+        response_text = ""
+
+        if model_provider == "anthropic":
+            client = initialize_anthropic_client()
+            if not client:
+                print("Error: Anthropic API key is required for Claude analysis.")
+                return None
+
+            system_prompt = f"""You are a customer support QA analyst for Pepperstone, a forex broker.
+            You will analyze customer support transcripts and score them on quality parameters.
+            YOUR RESPONSE MUST BE IN VALID JSON FORMAT.
             
-            # Always reset file pointer to beginning
-            if hasattr(uploaded_file, 'seek'):
-                uploaded_file.seek(0)
+            You will evaluate how well the agent's responses match the Knowledge Base answers when a customer asks a question covered in the KB.
             
-            if file_extension == 'txt':
-                return self._extract_from_txt(uploaded_file)
-            elif file_extension == 'csv':
-                if pd is None:
-                    raise ImportError("pandas library is required for CSV processing. Install with: pip install pandas")
-                return self._extract_from_csv(uploaded_file)
-            elif file_extension == 'pdf':
-                if PyPDF2 is None:
-                    raise ImportError("PyPDF2 library is required for PDF processing. Install with: pip install PyPDF2")
-                return self._extract_from_pdf(uploaded_file)
-            elif file_extension == 'docx':
-                if docx is None:
-                    raise ImportError("python-docx library is required for DOCX processing. Install with: pip install python-docx")
-                return self._extract_from_docx(uploaded_file)
-            else:
-                raise ValueError(f"Unsupported file format: {file_extension}")
-        except Exception as e:
-            import traceback
-            print(f"Error in extract_chats_from_file: {str(e)}")
-            print(traceback.format_exc())
-            return []
+            You MUST return your analysis ONLY as a valid, parseable JSON object with no additional text, explanations, or markdown.
+            The JSON must have parameters as keys, each containing a nested object with 'score', 'explanation', 'example', and 'suggestion' fields.
+            """
 
-    def _extract_from_txt(self, uploaded_file):
-        """Extract chats from a text file"""
-        try:
-            # Reset file pointer to beginning
-            if hasattr(uploaded_file, 'seek'):
-                uploaded_file.seek(0)
+            # Insert KB context in the user prompt, not the system prompt
+            user_prompt = f"""Analyze this customer support transcript and score EACH parameter listed below. 
+            Return your analysis ONLY as a valid JSON object.
             
-            # Handle different file object types
-            if hasattr(uploaded_file, 'read'):
-                # For BytesIO objects or file-like objects
-                content_bytes = uploaded_file.read()
-                if isinstance(content_bytes, bytes):
-                    content = content_bytes.decode('utf-8')
+            Parameters to evaluate:
+            {parameters_list}
+            
+            {scoring_info}
+            
+            {kb_context}
+            
+            Transcript to analyze:
+            {transcript}
+            
+            Remember to evaluate if the agent's answers match the Knowledge Base information when relevant.
+            Your response must be a single valid JSON object with no additional text.
+            Each parameter must be a key in the JSON, with a nested object containing 'score', 'explanation', 'example', and 'suggestion' fields.
+            
+            Example format:
+            {{
+              "Parameter Name 1": {{
+                "score": 85,
+                "explanation": "Explanation text",
+                "example": "Example from transcript",
+                "suggestion": "Improvement suggestion"
+              }},
+              "Parameter Name 2": {{
+                "score": 90,
+                "explanation": "Explanation text",
+                "example": "Example from transcript",
+                "suggestion": "Improvement suggestion"
+              }}
+            }}
+            """
+
+            try:
+                response = client.messages.create(
+                    model=model_name,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                    max_tokens=4000,
+                    temperature=0.0
+                )
+                response_text = response.content[0].text
+
+            except Exception as claude_error:
+                print(f"Claude API error: {str(claude_error)}")
+                return None
+
+        elif model_provider == "openai":
+            client = initialize_openai_client()
+            if not client:
+                print("Error: OpenAI API key is required for GPT analysis.")
+                return None
+
+            system_prompt = f"""You are a QA analyst for Pepperstone, a forex broker. Score the support transcript according to the rules and context provided. 
+            Your response must be a valid JSON object."""
+
+            user_prompt = f"""Score this support transcript on a scale of 0-{scale_max} for EXACTLY these parameters:
+            {parameters_list}
+            
+            {scoring_info}
+            
+            {kb_context}
+            
+            Transcript to analyze:
+            {transcript}
+            
+            Return your analysis as a JSON object with each parameter as a key, containing a nested object with 'score', 'explanation', 'example', and 'suggestion' fields.
+            """
+
+            try:
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.0
+                )
+                response_text = response.choices[0].message.content
+
+            except Exception as openai_error:
+                print(f"OpenAI API error: {str(openai_error)}")
+                return None
+
+        else:
+            print(f"Error: Unsupported model provider: {model_provider}")
+            return None
+
+        # Parse the response
+        analysis = parse_json_response(response_text)
+
+        if not analysis:
+            print("Error: Failed to parse API response to JSON")
+            print(f"Response preview: {response_text[:1000]}")  # Show first 1000 chars
+            return None
+
+        # Calculate weighted score
+        total_weight = sum(param["weight"] for param in rules["parameters"])
+        weighted_score = 0
+        missing_params = []
+
+        for param in rules["parameters"]:
+            param_name = param["name"]
+            if param_name in analysis and isinstance(analysis[param_name], dict) and "score" in analysis[param_name]:
+                score_value = analysis[param_name]["score"]
+                if isinstance(score_value, (int, float)):
+                    weighted_score += score_value * param["weight"]
                 else:
-                    content = content_bytes
+                    print(f"Warning: Invalid score type for parameter '{param_name}': {score_value}")
+                    missing_params.append(f"{param_name} (invalid score)")
             else:
-                raise ValueError("File object must have a 'read' method")
-                
-            return self._split_text_into_chats(content)
-        except Exception as e:
-            print(f"Error extracting from TXT: {str(e)}")
-            return []
+                missing_params.append(param_name)
 
-    def _extract_from_csv(self, uploaded_file):
-        """Extract chats from a CSV file"""
-        try:
-            # Reset file pointer to beginning
-            if hasattr(uploaded_file, 'seek'):
-                uploaded_file.seek(0)
-            
-            # Read CSV into pandas DataFrame
-            # Handle both BytesIO and file-like objects
-            if hasattr(uploaded_file, 'getvalue'):
-                # For BytesIO objects
-                csv_content = uploaded_file.getvalue()
-                if isinstance(csv_content, bytes):
-                    csv_content = csv_content.decode('utf-8')
-                df = pd.read_csv(io.StringIO(csv_content))
-            else:
-                # For other file-like objects
-                df = pd.read_csv(uploaded_file)
+        if missing_params:
+            print(f"Warning: Parameters missing or invalid in API response: {', '.join(missing_params)}")
 
-            # Check for common columns that might contain chat content
-            content_columns = [col for col in df.columns if any(
-                term in col.lower() for term in ['chat', 'message', 'content', 'text', 'transcript']
-            )]
+        # Calculate final weighted score
+        if total_weight > 0:
+            weighted_score = weighted_score / total_weight
+        else:
+            weighted_score = 0
 
-            if not content_columns:
-                # If no obvious content column, use the first column containing text data
-                for col in df.columns:
-                    if df[col].dtype == 'object':
-                        content_columns = [col]
-                        break
+        analysis["weighted_overall_score"] = round(weighted_score, 2)
+        analysis["model_provider"] = model_provider
+        analysis["model_name"] = model_name
 
-            # If still no content column found, use all columns
-            if not content_columns:
-                print("Warning: Couldn't identify chat content columns. Using all columns.")
-                content_columns = df.columns.tolist()
+        return analysis
 
-            # Join all content into a single string
-            content = ""
-
-            if len(content_columns) == 1:
-                # Use entire CSV as one chat
-                main_col = content_columns[0]
-                content = "\n".join(df[main_col].astype(str).tolist())
-            else:
-                # Try to format as a dialogue
-                for _, row in df.iterrows():
-                    for col in content_columns:
-                        content += f"{col}: {row[col]}\n"
-                    content += "\n"
-
-            return self._split_text_into_chats(content)
-
-        except Exception as e:
-            print(f"Error extracting from CSV: {str(e)}")
-            return []
-    
-    def _extract_from_pdf(self, uploaded_file):
-        """Extract chats from a PDF file"""
-        try:
-            # Reset file pointer to beginning
-            if hasattr(uploaded_file, 'seek'):
-                uploaded_file.seek(0)
-            
-            # Handle different file object types
-            if hasattr(uploaded_file, 'getvalue'):
-                # For BytesIO objects
-                pdf_data = uploaded_file.getvalue()
-                pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_data))
-            else:
-                # For other file-like objects
-                pdf_reader = PyPDF2.PdfReader(uploaded_file)
-                
-            content = ""
-
-            # Extract text from all pages
-            for page_num in range(len(pdf_reader.pages)):
-                content += pdf_reader.pages[page_num].extract_text() + "\n\n"
-                
-            return self._split_text_into_chats(content)
-            
-        except Exception as e:
-            print(f"Error extracting from PDF: {str(e)}")
-            return []
-
-    def _extract_from_docx(self, uploaded_file):
-        """
-        Extract chats from a DOCX file, now with support for tables and improved error handling.
-    
-        """
-        try:
-            if hasattr(uploaded_file, 'seek'):
-                uploaded_file.seek(0)
-            
-            doc = docx.Document(uploaded_file)
-            full_text = []
-
-            # Iterate through paragraphs
-            for para in doc.paragraphs:
-                # Check if the paragraph has text to avoid errors
-                if para.text:
-                    full_text.append(para.text.strip())
-
-            # Iterate through tables to extract all text from cells
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        # Check if the cell has text to avoid errors
-                        if cell.text:
-                            full_text.append(cell.text.strip())
-            
-            # Join all extracted text into a single block
-            content = "\n".join(full_text)
-            
-            if not content:
-                print("Warning: No text content was extracted from the DOCX file.")
-                return []
-
-            return self._split_text_into_chats(content)
-            
-        except Exception as e:
-            import traceback
-            print(f"Error extracting from DOCX: {str(e)}")
-            print(traceback.format_exc())
-            return []
-
-    def _extract_conversation_id_and_type(self, header_text: str) -> tuple[Optional[str], str]:
-        """
-        Extract conversation ID and determine if it's a Chat or Case.
-        FINAL VERSION: Preserves original prefixes like 'MS-' when detected.
-    
-        """
-        # NEW: First, check for the specific 'PREFIX-NUMBER' format (e.g., MS-00148928)
-        # The pattern captures the prefix and the number in two separate groups
-        prefix_match = re.search(r'\b([A-Z]{2,}-)(\d+)\b', header_text)
-        if prefix_match:
-            prefix = prefix_match.group(1) # e.g., "MS-"
-            number = prefix_match.group(2) # e.g., "00148928"
-            # Determine type based on context, default to 'chat' if unclear
-            convo_type = "case" if "case" in header_text.lower() else "chat"
-            return f"{prefix}{number}", convo_type
-
-        # --- Fallback to original logic for all other formats ---
-
-        # Chat patterns
-        chat_patterns = [
-            r"Chat\s*#?\s*(\d+)",
-            r"Chat\s*:\s*(\d+)",
-            r"Chat\s+ID\s*:?\s*(\d+)",
-            r"[A-Z]{2,}\s*[:-]?\s*Chat\s*#?\s*(\d+)",
-        ]
-        
-        # Case patterns
-        case_patterns = [
-            r"Case\s+ID\s+CT(\d+)",
-            r"Case\s+(\d+)",
-            r"Case\s*#\s*(\d+)",
-            r"Case\s*:\s*(\d+)",
-        ]
-        
-        # Check for Chat patterns
-        for pattern in chat_patterns:
-            match = re.search(pattern, header_text, re.IGNORECASE)
-            if match:
-                chat_id = match.group(1)
-                return f"Chat_{chat_id}", "chat"
-        
-        # Check for Case patterns
-        for pattern in case_patterns:
-            match = re.search(pattern, header_text, re.IGNORECASE)
-            if match:
-                case_id = match.group(1)
-                # Special handling for "CT" prefix
-                if "CT" in match.group(0).upper():
-                    return f"Case_CT{case_id}", "case"
-                return f"Case_{case_id}", "case"
-        
-        # If no match found, generate a hash as a fallback
-        hash_obj = hashlib.md5(header_text.encode())
-        return f"Unknown_{hash_obj.hexdigest()[:8]}", "unknown"
-    
-    def _split_text_into_chats(self, text: str) -> List[Dict[str, Any]]:
-        """
-        Split a text containing multiple chat/case transcripts into individual conversations.
-        FINAL VERSION: Flexibly finds all known header formats to reliably split chats.
-    
-        """
-        conversations = []
-        
-        MIN_LINES = 3
-        MIN_CHARS = 50
-        
-        # This list contains all valid patterns that can start a new conversation.
-        conversation_start_patterns = [
-            r'\b[A-Z]{2,}-\d+\b', # For MS-00148928
-            r"Chat\s*#?\s*\d+",
-            r"Chat\s*:\s*\d+",
-            r"Chat\s+ID\s*:?\s*\d+",
-            r"[A-Z]{2,}\s*[:-]?\s*Chat\s*#?\s*\d+",
-            r"Case\s+ID\s+CT\d+",
-            r"Case\s+\d+",
-            r"Case\s*#\s*\d+",
-            r"Case\s*:\s*\d+",
-        ]
-        
-        combined_pattern = '|'.join(f"(?:{p})" for p in conversation_start_patterns)
-        
-        # Use re.finditer to get the start and end position of each header match.
-        # This is more robust than splitting the string.
-        matches = list(re.finditer(combined_pattern, text, re.IGNORECASE | re.MULTILINE))
-        
-        if not matches:
-            # Fallback for files with no recognizable headers, treat as one chat.
-            if len(text.strip()) > MIN_CHARS:
-                return [{
-                    'id': 'Conversation_Single',
-                    'type': 'unknown',
-                    'content': text,
-                    'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'processed_content': self._clean_and_process_chat(text)
-                }]
-            return []
-
-        # Iterate through the matches to slice the text into individual chats.
-        for i, match in enumerate(matches):
-            start_pos = match.start()
-            # The end of the current chat is the start of the next one.
-            end_pos = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-            
-            full_conversation_text = text[start_pos:end_pos].strip()
-            header = match.group(0).strip()
-            
-            lines = [line for line in full_conversation_text.split('\n') if line.strip()]
-            if len(lines) >= MIN_LINES and len(full_conversation_text) >= MIN_CHARS:
-                conversation_id, conversation_type = self._extract_conversation_id_and_type(header)
-                
-                conversations.append({
-                    'id': conversation_id or f"Unknown_{i}",
-                    'type': conversation_type,
-                    'content': full_conversation_text,
-                    'timestamp': self._extract_timestamp(full_conversation_text) or datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'processed_content': self._clean_and_process_chat(full_conversation_text)
-                })
-                
-        return conversations
-
-    def _extract_chat_id(self, chat_text: str) -> Optional[str]:
-        """Extract chat/case ID from text - Updated for backward compatibility."""
-        conversation_id, _ = self._extract_conversation_id_and_type(chat_text)
-        return conversation_id
-
-    def _extract_timestamp(self, chat_text: str) -> Optional[str]:
-        """Extract timestamp from chat text."""
-        timestamp_patterns = [
-            r"Chat Started:\s*([^,\n]+(?:\s+\d{4})?)",
-            r"Session Started:\s*([^,\n]+(?:\s+\d{4})?)",
-            r"Conversation Started:\s*([^,\n]+(?:\s+\d{4})?)"
-        ]
-
-        for pattern in timestamp_patterns:
-            match = re.search(pattern, chat_text, re.IGNORECASE)
-            if match:
-                try:
-                    timestamp_str = match.group(1).strip()
-                    # Try to parse the timestamp - handle various formats
-                    for fmt in [
-                        "%A, %B %d, %Y, %H:%M:%S",
-                        "%A, %B %d, %Y %H:%M:%S",
-                        "%Y-%m-%d %H:%M:%S"
-                    ]:
-                        try:
-                            parsed_time = datetime.datetime.strptime(timestamp_str, fmt)
-                            return parsed_time.strftime("%Y-%m-%d %H:%M:%S")
-                        except ValueError:
-                            continue
-                except Exception:
-                    pass
+    except Exception as e:
+        print(f"Error analyzing transcript: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
         return None
 
-    def _clean_and_process_chat(self, chat_text: str) -> str:
-        """
-        Clean and format chat content for analysis - Definitive version with pre-processing.
-        This version handles inconsistent line breaks in agent/timestamp formats.
+def create_downloadable_json(result):
+    """
+    Create a properly formatted JSON string for download
     
-        """
-        # === NEW: Pre-processing step to normalize inconsistent line breaks ===
-        original_lines = chat_text.split('\n')
-        normalized_lines = []
-        i = 0
-        while i < len(original_lines):
-            line = original_lines[i].strip()
-            # Check if the NEXT line starts with the '•' timestamp marker
-            if (i + 1) < len(original_lines) and original_lines[i+1].strip().startswith('•'):
-                # This is a split speaker/timestamp. Join them.
-                speaker_name = line
-                timestamp_part = original_lines[i+1].strip()
-                # Combine them into a single, standardized line
-                normalized_lines.append(f"{speaker_name} {timestamp_part}")
-                i += 2 # Skip the next line since we've already processed it
-            else:
-                # This is a regular line
-                if line:
-                    normalized_lines.append(line)
-                i += 1
-        # =======================================================================
-
-        processed_lines = []
-        has_valid_content = False
+    Args:
+        result (dict): Analysis result dictionary
         
-        # Patterns are now simpler because the input is normalized
-        speaker_patterns = {
-            'customer': [
-                r'^Guest\s*•',
-            ],
-            'agent': [
-                r'^[A-Za-z\s]+\s*•', # Matches any name (e.g., "Jeremy N", "Kang A") followed by '•'
-            ]
-        }
+    Returns:
+        str: Formatted JSON string
+    """
+    try:
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error creating downloadable JSON: {str(e)}")
+        return json.dumps({"error": "Failed to format results"}, indent=2)
 
-        skip_patterns = [
-            r'^\s*\{ChatWindowButton:',
-            r'^\s*[-=*_]{3,}\s*$',
-            r'^\s*Agent joined the conversation\.',
-            r'^\s*Automated Process\s*•',
-            r'^\s*A transfer request was sent',
-            r'^.*(left|joined) the conversation\s*•',
-            r'^\s*Preview:.*\.(jpg|png|pdf|jpeg)',
-        ]
-        
-        # For backward compatibility with old formats that use colons
-        old_format_speaker_regex = re.compile(r'^(?:Customer|Client|Visitor|User|Guest|Agent|Support|Bot|Pepper):', re.IGNORECASE)
-
-        # Compile patterns for the new format
-        customer_regex = re.compile('|'.join(speaker_patterns['customer']), re.IGNORECASE)
-        agent_regex = re.compile('|'.join(speaker_patterns['agent']), re.IGNORECASE)
-        skip_regex = re.compile('|'.join(skip_patterns), re.IGNORECASE)
-
-        current_speaker = None
-        current_message_lines = []
-
-        def commit_message():
-            nonlocal has_valid_content
-            if current_speaker and current_message_lines:
-                message_text = ' '.join(current_message_lines).strip()
-                if message_text:
-                    # For old formats, the speaker tag is already in the message, so we don't add it again.
-                    if not old_format_speaker_regex.match(message_text):
-                        processed_lines.append(f"{current_speaker}: {message_text}")
-                    else:
-                        processed_lines.append(message_text)
-                    has_valid_content = True
-            current_message_lines.clear()
-
-        # Process the NORMALIZED lines
-        for line in normalized_lines:
-            if skip_regex.match(line):
-                continue
-
-            is_new_speaker = False
-            if customer_regex.search(line):
-                commit_message()
-                current_speaker = "Customer"
-                is_new_speaker = True
-            elif agent_regex.search(line):
-                commit_message()
-                current_speaker = "Agent"
-                is_new_speaker = True
-            elif old_format_speaker_regex.match(line):
-                # Handle old formats
-                commit_message()
-                speaker_tag = line.split(':')[0]
-                current_speaker = "Agent" if "agent" in speaker_tag.lower() or "support" in speaker_tag.lower() else "Customer"
-                current_message_lines.append(line) # Keep the original line with the tag
-                is_new_speaker = True
-
-
-            if not is_new_speaker and current_speaker:
-                current_message_lines.append(line)
-
-        commit_message()
-
-        if has_valid_content:
-            return '\n'.join(processed_lines)
-        
-        return ''
-
-def cleanup_session_state():
-    """Clean up old session data"""
-    max_age = 3600  # 1 hour
-    now = time.time()
-    # Note: This function needs to be adapted for Flask session management
-    pass
-
-class RateLimiter:
-    def __init__(self, calls_per_minute=60):
-        self.calls_per_minute = calls_per_minute
-        self.calls = []
+def create_downloadable_csv(result, rules):
+    """
+    Create a CSV string from analysis results for download
     
-    def wait_if_needed(self):
-        now = time.time()
-        self.calls = [t for t in self.calls if now - t < 60]
-        if len(self.calls) >= self.calls_per_minute:
-            time.sleep(60 - (now - self.calls[0]))
-        self.calls.append(now)
+    Args:
+        result (dict): Analysis result dictionary
+        rules (dict): Evaluation rules dictionary
+        
+    Returns:
+        str: CSV formatted string
+    """
+    try:
+        csv_data = "Parameter,Score,Has Suggestion\n"
+        
+        for param in rules["parameters"]:
+            param_name = param["name"]
+            if param_name in result and isinstance(result[param_name], dict):
+                score = result[param_name].get("score", "N/A")
+                has_suggestion = "Yes" if result[param_name].get("suggestion") else "No"
+                # Escape parameter name for CSV
+                param_name_escaped = f'"{param_name}"' if ',' in param_name else param_name
+                csv_data += f'{param_name_escaped},{score},{has_suggestion}\n'
+        
+        return csv_data
+    except Exception as e:
+        print(f"Error creating downloadable CSV: {str(e)}")
+        return "Parameter,Score,Has Suggestion\nError,N/A,No\n"
 
-def cleanup_temp_files():
-    """Clean up temporary audio files"""
-    temp_dir = tempfile.gettempdir()
-    pattern = "qa_engine_*.wav"
-    for f in glob.glob(os.path.join(temp_dir, pattern)):
-        try:
-            os.remove(f)
-        except OSError:
-            pass
+def create_batch_csv(results, rules):
+    """
+    Create a detailed CSV for batch analysis results
+    
+    Args:
+        results (list): List of analysis result dictionaries
+        rules (dict): Evaluation rules dictionary
+        
+    Returns:
+        str: CSV formatted string
+    """
+    try:
+        csv_data = "Chat ID,Parameter,Score,Explanation,Example,Suggestion\n"
+        
+        for result in results:
+            chat_id = result.get('chat_id', 'Unknown')
+            
+            for param in rules["parameters"]:
+                param_name = param["name"]
+                if param_name in result and isinstance(result[param_name], dict):
+                    param_data = result[param_name]
+                    score = param_data.get("score", "N/A")
+                    
+                    # Clean and escape text fields for CSV
+                    explanation = str(param_data.get("explanation", "")).replace('"', '""')
+                    example = str(param_data.get("example", "")).replace('"', '""')
+                    suggestion = str(param_data.get("suggestion", "N/A")).replace('"', '""')
+                    
+                    # Handle None values
+                    if suggestion in ["None", "null", "NULL"]:
+                        suggestion = "N/A"
+                    
+                    csv_data += f'"{chat_id}","{param_name}",{score},"{explanation}","{example}","{suggestion}"\n'
+        
+        return csv_data
+    except Exception as e:
+        print(f"Error creating batch CSV: {str(e)}")
+        return "Chat ID,Parameter,Score,Explanation,Example,Suggestion\nError,Error,N/A,Failed to generate report,N/A,N/A\n"
+
+def get_quality_level_from_score(score, rules):
+    """
+    Determine quality level based on score and rules
+    
+    Args:
+        score (float): The overall score
+        rules (dict): Evaluation rules dictionary
+        
+    Returns:
+        str: Quality level name
+    """
+    try:
+        # Use scoring system from rules if available
+        if "scoring_system" in rules and "quality_levels" in rules["scoring_system"]:
+            for level in rules["scoring_system"]["quality_levels"]:
+                if level["range"]["min"] <= score <= level["range"]["max"]:
+                    return level["name"]
+        
+        # Fallback to simple quality level determination
+        if score >= 85:
+            return "Excellent"
+        elif score >= 70:
+            return "Good"
+        elif score >= 50:
+            return "Needs Improvement"
+        else:
+            return "Poor"
+    except Exception as e:
+        print(f"Error determining quality level: {str(e)}")
+        return "Unknown"
+
+def get_quality_color_class(quality_level):
+    """
+    Get CSS color class based on quality level
+    
+    Args:
+        quality_level (str): Quality level name
+        
+    Returns:
+        str: CSS class name
+    """
+    quality_level_lower = quality_level.lower()
+    
+    if "excellent" in quality_level_lower:
+        return "score-box-excellent"
+    elif "good" in quality_level_lower:
+        return "score-box-good"
+    elif "needs improvement" in quality_level_lower or "improvement" in quality_level_lower:
+        return "score-box-needs-improvement"
+    elif "poor" in quality_level_lower:
+        return "score-box-poor"
+    else:
+        return "score-box-needs-improvement"  # Default
+
+def validate_analysis_result(result, rules):
+    """
+    Validate that analysis result has all required parameters
+    
+    Args:
+        result (dict): Analysis result dictionary
+        rules (dict): Evaluation rules dictionary
+        
+    Returns:
+        tuple: (is_valid, missing_parameters)
+    """
+    if not result or not isinstance(result, dict):
+        return False, ["Invalid result structure"]
+    
+    missing_params = []
+    
+    for param in rules["parameters"]:
+        param_name = param["name"]
+        if param_name not in result:
+            missing_params.append(param_name)
+        elif not isinstance(result[param_name], dict):
+            missing_params.append(f"{param_name} (invalid structure)")
+        elif "score" not in result[param_name]:
+            missing_params.append(f"{param_name} (missing score)")
+    
+    return len(missing_params) == 0, missing_params
+
+def enhance_analysis_result(result, rules):
+    """
+    Enhance analysis result with additional metadata and validation
+    
+    Args:
+        result (dict): Analysis result dictionary
+        rules (dict): Evaluation rules dictionary
+        
+    Returns:
+        dict: Enhanced analysis result
+    """
+    if not result:
+        return None
+    
+    try:
+        # Add timestamp
+        result["analysis_timestamp"] = datetime.now().isoformat()
+        
+        # Add quality level
+        overall_score = result.get("weighted_overall_score", 0)
+        result["quality_level"] = get_quality_level_from_score(overall_score, rules)
+        result["quality_color_class"] = get_quality_color_class(result["quality_level"])
+        
+        # Validate and fill missing parameters
+        for param in rules["parameters"]:
+            param_name = param["name"]
+            if param_name not in result:
+                result[param_name] = {
+                    "score": 50,  # Default neutral score
+                    "explanation": "No analysis available for this parameter",
+                    "example": "N/A",
+                    "suggestion": "Please review manually"
+                }
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error enhancing analysis result: {str(e)}")
+        return result
