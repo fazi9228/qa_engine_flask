@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 import concurrent.futures
 from knowledge_base import KnowledgeBase
+from chat_formatter import format_transcript_for_ai
 
 # Import utilities from utils.py
 from utils import (
@@ -18,20 +19,13 @@ from utils import (
 def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_template_path="QA_prompt.md", model_provider="anthropic", model_name=None):
     """
     Analyze a chat transcript using AI models with proper error handling for Flask
-    
-    Args:
-        transcript (str): The chat transcript text
-        rules (dict): Evaluation rules dictionary
-        kb (KnowledgeBase): Knowledge Base instance
-        target_language (str): Target language for analysis ('en' or 'native')
-        prompt_template_path (str): Path to prompt template file
-        model_provider (str): AI provider ("anthropic" or "openai")
-        model_name (str): Model name to use
-        
-    Returns:
-        dict: Analysis results or None if analysis failed
+   
     """
     try:
+        # === NEW: Add the formatting step right at the beginning ===
+        formatted_transcript = format_transcript_for_ai(transcript)
+        # ==========================================================
+
         # Set default model name if not provided
         if not model_name:
             if model_provider == "anthropic":
@@ -39,7 +33,8 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
             elif model_provider == "openai":
                 model_name = "gpt-4o"
 
-        # Use cached language detection
+        # Use cached language detection on the ORIGINAL transcript if needed,
+        # but use the FORMATTED transcript for the main analysis.
         text_sample = transcript[:200]
         _, lang_name = detect_language_cached(text_sample, model_provider)
 
