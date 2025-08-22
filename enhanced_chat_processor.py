@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 import time
 import tempfile
 import glob
+import unicodedata
 
 # Try to import file handling libraries
 try:
@@ -196,9 +197,11 @@ class EnhancedChatProcessor:
 
             # Iterate through paragraphs
             for para in doc.paragraphs:
-                # Check if the paragraph has text to avoid errors
                 if para.text:
-                    full_text.append(para.text.strip())
+                    text = para.text.strip()
+                    # Normalize Unicode text to handle mixed encodings
+                    text = unicodedata.normalize('NFC', text)
+                    full_text.append(text)
 
             # Iterate through tables to extract all text from cells
             for table in doc.tables:
@@ -378,9 +381,8 @@ class EnhancedChatProcessor:
 
     def _clean_and_process_chat(self, chat_text: str) -> str:
         """
-        Clean and format chat content for analysis - Definitive version with pre-processing.
-        This version handles inconsistent line breaks in agent/timestamp formats.
-    
+        Clean and format chat content for analysis - UPDATED to preserve category headers
+        This version handles inconsistent line breaks AND preserves important metadata.
         """
         # === NEW: Pre-processing step to normalize inconsistent line breaks ===
         original_lines = chat_text.split('\n')
@@ -388,6 +390,13 @@ class EnhancedChatProcessor:
         i = 0
         while i < len(original_lines):
             line = original_lines[i].strip()
+            
+            # IMPORTANT: Preserve category headers - don't process them as speaker lines
+            if line.startswith('**Chat reason:') or line.startswith('Chat reason:') or 'Chat reason:' in line:
+                normalized_lines.append(line)
+                i += 1
+                continue
+                
             # Check if the NEXT line starts with the '•' timestamp marker
             if (i + 1) < len(original_lines) and original_lines[i+1].strip().startswith('•'):
                 # This is a split speaker/timestamp. Join them.
@@ -406,6 +415,18 @@ class EnhancedChatProcessor:
         processed_lines = []
         has_valid_content = False
         
+        # UPDATED: Skip patterns that DON'T include category headers
+        skip_patterns = [
+            r'^\s*\{ChatWindowButton:',
+            r'^\s*Agent joined the conversation\.',
+            r'^\s*Automated Process\s*•',
+            r'^\s*A transfer request was sent',
+            r'^.*(left|joined) the conversation\s*•',
+            r'^\s*Preview:.*\.(jpg|png|pdf|jpeg)',
+            # REMOVED: The general asterisk pattern that was catching category headers
+            # r'^\s*[-=*_]{3,}\s*$',  # This was removing **Chat reason: ...**
+        ]
+        
         # Patterns are now simpler because the input is normalized
         speaker_patterns = {
             'customer': [
@@ -415,16 +436,6 @@ class EnhancedChatProcessor:
                 r'^[A-Za-z\s]+\s*•', # Matches any name (e.g., "Jeremy N", "Kang A") followed by '•'
             ]
         }
-
-        skip_patterns = [
-            r'^\s*\{ChatWindowButton:',
-            r'^\s*[-=*_]{3,}\s*$',
-            r'^\s*Agent joined the conversation\.',
-            r'^\s*Automated Process\s*•',
-            r'^\s*A transfer request was sent',
-            r'^.*(left|joined) the conversation\s*•',
-            r'^\s*Preview:.*\.(jpg|png|pdf|jpeg)',
-        ]
         
         # For backward compatibility with old formats that use colons
         old_format_speaker_regex = re.compile(r'^(?:Customer|Client|Visitor|User|Guest|Agent|Support|Bot|Pepper):', re.IGNORECASE)
@@ -452,6 +463,12 @@ class EnhancedChatProcessor:
 
         # Process the NORMALIZED lines
         for line in normalized_lines:
+            # IMPORTANT: Preserve category headers as-is
+            if 'Chat reason:' in line or 'Category:' in line or 'Issue type:' in line or 'Topic:' in line:
+                processed_lines.append(line)  # Keep category headers intact
+                has_valid_content = True
+                continue
+                
             if skip_regex.match(line):
                 continue
 
@@ -471,7 +488,6 @@ class EnhancedChatProcessor:
                 current_speaker = "Agent" if "agent" in speaker_tag.lower() or "support" in speaker_tag.lower() else "Customer"
                 current_message_lines.append(line) # Keep the original line with the tag
                 is_new_speaker = True
-
 
             if not is_new_speaker and current_speaker:
                 current_message_lines.append(line)
