@@ -24,33 +24,39 @@ Accuracy & Compliance – Ensuring correct information that aligns with forex tr
 Efficiency & Resolution – The agent's ability to resolve issues effectively and within expected response times.
 Documentation & Reporting – Proper tagging, logging, and follow-up actions.
 
-## CRITICAL SCORING INSTRUCTIONS - UPDATED
+### Use the Full 0-100 Range
+You MUST utilize the complete scoring range effectively:
 
-### HIGH PERFORMANCE SCORING (95-100 points)
-When an agent demonstrates excellent performance in any parameter:
-- **MUST award 95-100 points** when evaluation uses positive phrases like:
-  - "excellent", "outstanding", "very well handled", "appropriate", "effective"
-  - "no improvements needed", "continue current approach", "meets all requirements"
-  - "demonstrates good understanding", "professional approach", "clear and helpful"
-  - "handles well", "properly addresses", "correctly follows"
-- **100 points should be COMMON** for good performance - not rare
-- **Reserve 85-94 range** only when there are actual issues to address
-- **Don't penalize perfection** - if no real problems exist, score should be 95-100
+**90-100 (Excellent)**:
+- 95-100: Performance exceeds expectations, exemplary service
+- 90-94: All criteria met perfectly with no significant issues
 
-### BALANCED SCORING PHILOSOPHY
-**100/100 Criteria - ACHIEVABLE:**
-- Agent meets all core requirements for the category
-- Performance clearly meets or exceeds standards
-- Any suggestions are optimization/enhancement ideas, not corrections
-- No actual problems or compliance issues present
+**80-89 (Good)**:
+- 85-89: Most criteria met well, minor improvements possible
+- 80-84: Good performance meeting requirements adequately
 
-**90-94 Criteria:**
-- Agent performs well with minor enhancement opportunities
-- Core requirements met with small room for improvement
+**70-79 (Fair)**:
+- 75-79: Acceptable performance with some noticeable issues
+- 70-74: Multiple areas needing improvement
 
-**Below 90 Criteria:**
-- Only when there are actual issues that need correction
-- Clear gaps in performance or compliance concerns
+### Scoring Mindset:
+- **DO NOT be overly conservative** - use 90+ scores when merited
+- **DO NOT cluster all scores in 70-80 range** - spread across full scale
+- **DO award 95+ scores** when performance truly excels
+
+## System-Level Categorization Recognition
+
+### Critical Rule for Tagging & Categorization:
+If you see "Chat reason: General Query" or similar in the chat header, 
+this counts as proper categorization and should score 85+ points.
+
+### Scoring Guidelines:
+- **95-100**: System category + agent adds specific tags + proper resolution categorization
+- **85-94**: System category clearly present (e.g., "Chat reason: General Query")
+- **75-84**: Some categorization attempt visible in chat content
+- **Below 75**: No categorization found anywhere
+
+**CRITICAL**: If chat header shows "Chat reason: X", this counts as proper categorization!
 
 ## Message Attribution Rules
 
@@ -256,6 +262,8 @@ Agent: "Xin chào! Tôi có thể giúp gì cho bạn?" (Vietnamese - GOOD)
 - **DO increase scores** when agents explain the "why" behind requirements
 - **DO increase scores** for transparency about process limitations
 - **DO increase scores** for proper use of knowledge base information
+
+
 
 ## Specific Interpretation Corrections
 
