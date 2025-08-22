@@ -154,23 +154,32 @@
         "Include timestamps, customer queries, and resolutions."
       ]
     },
-    {
-      "name": "Tagging & Categorization",
-      "description": "Uses the correct tags or categories for accurate reporting and case tracking.",
-      "weight": 0.5,
-      "category": "Documentation & Reporting",
-      "guidelines": [
-        "Uses the correct tags or categories for accurate reporting and case tracking.",
-        "Examples of tags: 'Withdrawal Issue', 'Login Problem', 'Trade Execution Query'."
-      ]
-    }
+      {
+    "name": "Tagging & Categorization",
+    "description": "Uses the correct tags or categories for accurate reporting and case tracking, including system-level categorization.",
+    "weight": 0.5,
+    "category": "Documentation & Reporting",
+    "guidelines": [
+      "Check for system-level categorization in chat headers (e.g., 'Chat reason: General Query')",
+      "Evaluate agent-applied tags within the conversation",
+      "Look for proper issue type identification and resolution categorization",
+      "Examples of agent tags: 'Withdrawal Issue', 'Login Problem', 'Trade Execution Query'",
+      "System categories like 'General Query', 'Technical Support', 'Account Issue' count as proper categorization",
+      "Scoring: 85-94 when system category is present, 95-100 when system + agent tagging both present"
+    ]
+  }
   ],
   "score_ranges": {
-    "excellent": {
-      "min": 8.5,
-      "max": 10,
-      "description": "Exceptional service that exceeded expectations"
-    },
+   "excellent": {
+    "min": 9.5,
+    "max": 10,
+    "description": "Perfect execution that meets all requirements"
+  },
+  "very_good": {
+    "min": 8.5,
+    "max": 9.4,
+    "description": "Excellent work with minor enhancement opportunities"
+  },
     "good": {
       "min": 7.0,
       "max": 8.4,
