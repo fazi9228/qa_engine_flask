@@ -36,6 +36,9 @@ from chat_anonymizer import ChatAnonymizer
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'bulletproof-dev-key')
 
+app.config['JSON_AS_ASCII'] = False
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
 # Set up upload folder for temporary files
 UPLOAD_FOLDER = tempfile.mkdtemp()
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -310,7 +313,7 @@ def anonymization():
 
 @app.route('/download/anonymized/<format>')
 def download_anonymized(format):
-    """Download anonymized results"""
+    """Download anonymized results - FIXED for UTF-8 Excel compatibility"""
     print(f"=== DOWNLOAD ANONYMIZED: {format} ===")
     
     if 'last_anonymization' not in session:
@@ -365,6 +368,7 @@ def download_anonymized(format):
 # ================ SINGLE ANALYSIS (UPDATED with auto-anonymization) ================
 
 @app.route('/single-analysis', methods=['GET', 'POST'])
+@app.route('/single-analysis', methods=['GET', 'POST'])
 def single_analysis():
     """Single chat analysis with anonymized preview for transparency"""
     global current_single_file
@@ -400,35 +404,20 @@ def single_analysis():
                 
                 print(f"🔒 Anonymization complete: {anonymization_stats['total_replacements']} items removed")
                 
-                # Step 2: Perform analysis using the anonymization-enabled function if available
-                try:
-                    # Try to use the anonymization-enabled analysis
-                    print("Attempting auto-anonymization analysis...")
-                    result = analyze_with_anonymization(
-                        transcript,  # Function handles anonymization internally
-                        chat_rules,
-                        kb,
-                        target_language=target_language,
-                        prompt_template_path="QA_prompt.md",
-                        model_provider=provider,
-                        model_name=model_name
-                    )
-                    print("✅ Used auto-anonymization analysis")
-                    
-                except NameError:
-                    # Fall back to regular analysis with pre-anonymized text
-                    print("Auto-anonymization function not available, using standard analysis with pre-anonymized text")
-                    from chat_qa import analyze_chat_transcript as original_analyze
-                    result = original_analyze(
-                        anonymized_transcript,  # Use our pre-anonymized version
-                        chat_rules,
-                        kb,
-                        target_language=target_language,
-                        prompt_template_path="QA_prompt.md",
-                        model_provider=provider,
-                        model_name=model_name
-                    )
-                    print("✅ Used standard analysis with anonymized text")
+                # Step 2: Perform analysis - FIXED to use correct function
+                print("🤖 Starting QA analysis...")
+                
+                result = analyze_chat_transcript(
+                    transcript,  # Use original transcript - function will handle anonymization if enabled
+                    chat_rules,
+                    kb,
+                    target_language=target_language,
+                    prompt_template_path="QA_prompt.md",
+                    model_provider=provider,
+                    model_name=model_name
+                )
+                
+                print("✅ QA analysis completed")
                 
                 # Store result in file
                 if result:
@@ -441,8 +430,12 @@ def single_analysis():
                     
                     current_single_file = save_results_simple(result, "single")
                     print(f"✅ Stored single result in file: {current_single_file}")
+                    
+                    # Add success message
+                    flash(f'Analysis completed successfully! {anonymization_stats["total_replacements"]} sensitive items were automatically protected.')
                 else:
-                    print("❌ No result to store")
+                    print("❌ No result returned from analysis")
+                    flash('Analysis failed. Please check your API configuration and try again.')
                     
             except Exception as e:
                 print(f"❌ Error during analysis: {str(e)}")
@@ -474,7 +467,7 @@ def single_analysis():
         detected_language=detected_language,
         categories=chat_rules.get('categories', [])
     )
-
+    
 # ================ BATCH ANALYSIS (UPDATED with auto-anonymization) ================
 @app.route('/batch-analysis', methods=['GET', 'POST'])
 def batch_analysis():
@@ -713,7 +706,7 @@ def settings():
 # ================ DOWNLOAD SYSTEM ================
 @app.route('/download/<type>/<format>')
 def download_report(type, format):
-    """Download analysis reports"""
+    """Download analysis reports - FIXED for UTF-8 Excel compatibility"""
     print(f"=== DOWNLOAD REQUEST: {type}/{format} ===")
     
     try:
@@ -771,15 +764,15 @@ def download_report(type, format):
             
             csv_content = '\n'.join(csv_lines)
             
-            # Create response
-            response = make_response(csv_content)
-            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            # Create response with UTF-8 BOM for Excel compatibility
+            response = make_response('\ufeff' + csv_content)  # \ufeff is UTF-8 BOM
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8-sig'  # Use utf-8-sig
             
             # Add privacy indicator to filename if anonymization was used
             privacy_suffix = "_secure" if ANONYMIZATION_ENABLED else ""
             response.headers['Content-Disposition'] = f'attachment; filename=qa_batch_analysis{privacy_suffix}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
             
-            print(f"✅ Returning CSV with {len(csv_lines)} rows")
+            print(f"✅ Returning CSV with UTF-8 BOM and {len(csv_lines)} rows")
             return response
             
         elif type == 'single' and format == 'json':
@@ -829,8 +822,9 @@ def download_report(type, format):
             
             csv_content = '\n'.join(csv_lines)
             
-            response = make_response(csv_content)
-            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            # FIXED: Add UTF-8 BOM for Excel compatibility
+            response = make_response('\ufeff' + csv_content)  # Add BOM
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8-sig'  # Use utf-8-sig
             
             # Add privacy indicator to filename if anonymization was used
             privacy_suffix = "_secure" if ANONYMIZATION_ENABLED else ""
