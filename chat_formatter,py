@@ -24,12 +24,18 @@ def format_transcript_for_ai(raw_transcript: str) -> str:
         # Look ahead for the bullet point '•' which signals a timestamp
         # Case 1: 3-line split (Name \n • \n timestamp)
         if (i + 2) < len(original_lines) and \
-           original_lines[i+1].strip() == '•' and \
-           re.match(r'\d{2}/\d{2}/\d{4}', original_lines[i+2].strip()):
+        original_lines[i+1].strip().startswith('•') and \
+        not line.startswith('**[') and \
+        len(original_lines[i+2].strip()) > 0:
             
-            combined_line = f"{line.strip()} • {original_lines[i+2].strip()}"
+            speaker_name = line
+            timestamp_part = original_lines[i+1].strip()
+            message_content = original_lines[i+2].strip()
+            
+            # Combine into single conversation line
+            combined_line = f"{speaker_name} {timestamp_part}: {message_content}"
             normalized_lines.append(combined_line)
-            i += 3 # Advance index by 3 to skip the lines we just combined
+            i += 3 # Skip all 3 lines
             
         # Case 2: 2-line split (Name \n • timestamp)
         elif (i + 1) < len(original_lines) and \
