@@ -21,15 +21,75 @@ class ChatCategoryExtractor:
     """Handles category extraction from chat transcripts"""
     
     def __init__(self):
+        # FIXED: Use the OFFICIAL 59 chat reason categories from QA_prompt.md
+        # 🔄 FUTURE UPDATES: When new categories are added, just add them to this list below
+        # Keep lowercase, use hyphens (not underscores), and add a comment with the date
+        self.valid_categories = [
+            # Application & Account Setup (1-8)
+            'application - status', 'archiving request', 'automated close', 
+            'backoffice internal request', 'banned country non-residency check',
+            'cash bonus', 'client exit', 'close account',
+            
+            # Finance & Deposits (9-17)
+            'credit card issue', 'crypto trading', 'duplicate case',
+            'education/tools', 'escalated to legal & compliance', 
+            'feedback responses', 'finance - deposit', 'finance - general',
+            'finance - withdrawal',
+            
+            # General Account & Support (18-21)
+            'general account admin', 'general query', 'gold rebate', 
+            'ib/partners',
+            
+            # Technical Issues (22-27)
+            'incident / outage', 'instrument depreciation emails',
+            'leverage change', 'login issues - my account', 
+            'login issues - sca', 'login issues - trading account',
+            
+            # Marketing & Programs (28-31)
+            'marketing', 'mark up increase', 'negative balance adjustment',
+            'pepperstone pro q\'s',
+            
+            # Platforms (32-36)
+            'platform - ctrader', 'platform - mac', 'platform - mt4/mt5',
+            'platform - pepperstone app', 'platform - pepperstone webtrader',
+            
+            # Promotions & Regulation (37-39)
+            'promotions', 'regulation/licensing', 'sales lead',
+            
+            # Social & Trading (40-44)
+            'social - no response required', 'social - separate case created',
+            'social trading/third-party', 'sophisticated investor', 'spams',
+            
+            # Statements & Support (45-50)
+            'statements', 'support internal request', 'swap-free', 'tax',
+            'thai bank book', 'trade investigation',
+            
+            # Trading Conditions (51-55)
+            'trading - conditions/instruments', 'trading - issues',
+            'tradingview', 'trading - vps', 'unarchiving',
+            
+            # Website Issues (56-59)
+            'website (authenticated) - my account', 
+            'website (unauthenticated) - my account',
+            'website - main site', 'website - sca'
+            
+            # ✨ ADD NEW CATEGORIES BELOW THIS LINE ✨
+            # Example format:
+            # # New Category Group (60-62) - Added YYYY-MM-DD
+            # 'new category name',
+            # 'another category',
+        ]
+        
         # Multiple patterns for different chat formats
         self.category_patterns = [
-            r'Chat reason:\s*(.+?)(?:\n|$)',
-            r'Category:\s*(.+?)(?:\n|$)', 
-            r'Reason for chat:\s*(.+?)(?:\n|$)',
-            r'Issue type:\s*(.+?)(?:\n|$)',
-            r'Topic:\s*(.+?)(?:\n|$)',
-            r'Subject:\s*(.+?)(?:\n|$)',
-            r'Type:\s*(.+?)(?:\n|$)',
+            r'\*\*Chat reason:\s*(.+?)\*\*',        # **Chat reason: General Query**
+            r'Chat reason:\s*(.+?)(?:\n|$)',         # Chat reason: General Query
+            r'Category:\s*(.+?)(?:\n|$)',            # Category: General Query
+            r'Reason for chat:\s*(.+?)(?:\n|$)',     # Reason for chat: ...
+            r'Issue type:\s*(.+?)(?:\n|$)',          # Issue type: ...
+            r'Topic:\s*(.+?)(?:\n|$)',               # Topic: ...
+            r'Subject:\s*(.+?)(?:\n|$)',             # Subject: ...
+            r'Type:\s*(.+?)(?:\n|$)',                # Type: ...
         ]
     
     def extract_category(self, transcript: str) -> Optional[str]:
@@ -47,13 +107,41 @@ class ChatCategoryExtractor:
             if match:
                 category = match.group(1).strip()
                 # Clean up common artifacts
-                category = re.sub(r'[^\w\s\-&/]', '', category)  # Remove special chars except common ones
+                category = re.sub(r'[*{}]', '', category).strip()
+                category = re.sub(r'[^\w\s\-&/()]', '', category)  # Remove special chars except common ones
                 category = category.strip()
                 
                 if len(category) > 2:  # Ensure it's meaningful
                     return category
         
         return None
+    
+    def is_valid_category(self, category: Optional[str]) -> bool:
+        """
+        Check if category matches one of the 59 official categories
+        
+        Args:
+            category: Extracted category or None
+            
+        Returns:
+            True if category is valid (matches official list)
+        """
+        if not category:
+            return False
+        
+        # Normalize for comparison
+        category_lower = category.lower().strip()
+        
+        # Check for exact or partial match with official categories
+        for valid_cat in self.valid_categories:
+            # Exact match
+            if category_lower == valid_cat:
+                return True
+            # Partial match (category contains valid category or vice versa)
+            if valid_cat in category_lower or category_lower in valid_cat:
+                return True
+        
+        return False
     
     def should_boost_tagging_score(self, category: Optional[str]) -> bool:
         """
@@ -65,82 +153,56 @@ class ChatCategoryExtractor:
         Returns:
             True if category should boost tagging scores
         """
-        if not category:
-            return False
-        
-        # Filter out generic/meaningless categories
-        generic_categories = [
-            'general', 'misc', 'other', 'unknown', 'n/a', 'na', 
-            'support', 'help', 'question', 'inquiry'
-        ]
-        
-        return category.lower().strip() not in generic_categories
+        return self.is_valid_category(category)
 
 
 def extract_chat_category(transcript: str) -> tuple:
     """
     Extract chat category from transcript and determine scoring strategy
+    FIXED: Now uses the official 59-category list from QA_prompt.md
+    
     Returns: (category, scoring_strategy, should_boost_score)
     """
-    # Pattern specifically for your format: **Chat reason: General Query**
-    category_patterns = [
-        r'\*\*Chat reason:\s*(.+?)\*\*',  # **Chat reason: General Query**
-        r'Chat reason:\s*(.+?)(?:\n|$)',   # Chat reason: General Query
-        r'Category:\s*(.+?)(?:\n|$)',      # Category: General Query
-        r'Issue type:\s*(.+?)(?:\n|$)',    # Issue type: General Query
-        r'Topic:\s*(.+?)(?:\n|$)',         # Topic: General Query
-    ]
+    extractor = ChatCategoryExtractor()
     
-    # Known valid categories - UPDATE THIS LIST based on your business needs
-    valid_categories =  [
-        'general query', 'account types', 'trading platforms', 'leverage change',
-        'finance - general', 'deposits & withdrawals', 'technical support',
-        'account verification', 'platform issues', 'trading questions',
-        'compliance', 'kyc', 'documentation', 'payment issues'
-    ]
+    # Extract category using patterns
+    extracted_category = extractor.extract_category(transcript)
     
-    for pattern in category_patterns:
-        match = re.search(pattern, transcript, re.IGNORECASE | re.MULTILINE)
-        if match:
-            category = match.group(1).strip()
-            # Clean up any remaining markdown or special characters
-            category = re.sub(r'[*{}]', '', category).strip()
-            
-            if len(category) > 2:
-                # Check if category is valid/recognized
-                category_lower = category.lower()
-                
-                # Exact match or contains valid category
-                is_valid_category = any(valid_cat in category_lower for valid_cat in valid_categories)
-                
-                if is_valid_category:
-                    return category, "boost", True  # Found valid category - boost score
-                else:
-                    return category, "penalize", False  # Found category but it's wrong/unrecognized
+    if not extracted_category:
+        # No category found at all
+        return None, "zero", False
     
-    return None, "zero", False  # No category found - give 0 points
+    # Check if it's a valid official category
+    if extractor.is_valid_category(extracted_category):
+        # Valid category - boost score
+        return extracted_category, "boost", True
+    else:
+        # Found category but it's not in the official list - penalize
+        return extracted_category, "penalize", False
 
 
 # Function to analyze a transcript with cultural considerations
 def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_template_path="QA_prompt.md", model_provider="anthropic", model_name=None):
     """
     Analyze a chat transcript using AI models with enhanced category detection
+    FIXED: Now correctly validates against official 59 categories
     """
     try:
         # === FORMAT TRANSCRIPT ===
         formatted_transcript = format_transcript_for_ai(transcript)
         
-        # === EXTRACT CATEGORY ===
+        # === EXTRACT AND VALIDATE CATEGORY ===
         extracted_category, scoring_strategy, should_boost_tagging = extract_chat_category(transcript)
         
+        # Enhanced logging with validation details
         if extracted_category:
             if scoring_strategy == "boost":
-                print(f"📋 [Category] Found VALID: '{extracted_category}' → Boost score 85-95")
+                print(f"📋 [Category] Found VALID official category: '{extracted_category}' → Boost score 85-95")
             elif scoring_strategy == "penalize":
-                print(f"📋 [Category] Found INVALID: '{extracted_category}' → Penalize score 20-40")
+                print(f"📋 [Category] Found INVALID category: '{extracted_category}' → Penalize score 20-40")
+                print(f"    ⚠️ This category is NOT in the official 59-category list!")
         else:
             print("📋 [Category] MISSING → Zero score (0 points)")
-
 
         # Set default model name if not provided
         if not model_name:
@@ -149,8 +211,7 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
             elif model_provider == "openai":
                 model_name = "gpt-4o"
 
-        # Use cached language detection on the ORIGINAL transcript if needed,
-        # but use the FORMATTED transcript for the main analysis.
+        # Use cached language detection
         text_sample = transcript[:200]
         _, lang_name = detect_language_cached(text_sample, model_provider)
 
@@ -177,7 +238,7 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
             print(f"Error: Could not load prompt template from {prompt_template_path}")
             return None
 
-        # Prepare KB Context with clearer instructions
+        # Prepare KB Context
         kb_context = "\n\n## Internal Knowledge Base Guidance:\n"
         kb_context += "The following are standard answers from our knowledge base for common questions. "
         kb_context += "Only evaluate Knowledge Base adherence when customer questions clearly match KB content. "
@@ -194,31 +255,38 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
             kb_context += "The knowledge base is currently empty. Evaluate based on general accuracy and procedures.\n"
 
         # === CATEGORY-AWARE SCORING INSTRUCTIONS ===
-        # === ENHANCED CATEGORY-AWARE SCORING INSTRUCTIONS ===
         category_context = ""
         if extracted_category:
             if scoring_strategy == "boost":
-                # Valid category found - boost score
-                category_context = f"\n\n## ✅ EXCELLENT - Valid Chat Categorization Detected:\n"
+                # Valid official category found
+                category_context = f"\n\n## ✅ EXCELLENT - Valid Official Chat Categorization Detected:\n"
                 category_context += f"This chat has been properly categorized as: '{extracted_category}'\n"
-                category_context += f"✅ SCORING INSTRUCTION: Since a VALID system category was found, "
-                category_context += f"award 'Tagging & Categorization' parameter a score of 85-95 points. "
-                category_context += f"The presence of proper categorization shows excellent process adherence.\n"
+                category_context += f"This category IS in the official 59-category list from Pepperstone.\n"
+                category_context += f"✅ SCORING INSTRUCTION: Award 'Tagging & Categorization' parameter a score of 85-95 points. "
+                category_context += f"The presence of proper official categorization shows excellent process adherence.\n"
                 
             elif scoring_strategy == "penalize":
-                # Invalid/wrong category found - penalize
+                # Invalid/wrong category found
                 category_context = f"\n\n## ⚠️ POOR - Invalid Chat Categorization Detected:\n"
                 category_context += f"This chat has been categorized as: '{extracted_category}'\n"
-                category_context += f"❌ SCORING INSTRUCTION: The category appears to be INCORRECT or UNRECOGNIZED. "
-                category_context += f"Award 'Tagging & Categorization' parameter a score of 20-40 points. "
-                category_context += f"Wrong categorization is worse than no categorization.\n"
+                category_context += f"❌ CRITICAL ISSUE: This category is NOT in the official 59-category list!\n"
+                category_context += f"The agent used an incorrect or custom category instead of the official categories.\n"
+                category_context += f"❌ SCORING INSTRUCTION: Award 'Tagging & Categorization' parameter a score of 20-40 points. "
+                category_context += f"Wrong categorization is worse than no categorization - it causes reporting errors.\n"
+                category_context += f"\n📋 REMINDER: Only these 59 official categories are valid:\n"
+                category_context += "1. Application - Status, 2. Archiving request, 3. Automated Close, 4. BackOffice Internal Request, "
+                category_context += "5. Banned Country Non-Residency Check, 6. Cash Bonus, 7. Client Exit, 8. Close account, "
+                category_context += "9. Credit card issue, 10. Crypto Trading, 11. Duplicate Case, 12. Education/Tools, "
+                category_context += "13. Escalated to Legal & Compliance, 14. Feedback Responses, 15. Finance - Deposit, "
+                category_context += "16. Finance - General, 17. Finance - Withdrawal, 18. General Account Admin, "
+                category_context += "19. General Query, 20-59. [See full list in documentation]\n"
         else:
-            # No category found - zero score
+            # No category found
             category_context = f"\n\n## ❌ CRITICAL - No Chat Categorization Found:\n"
             category_context += f"No system category detected for this chat. This is a critical failure.\n"
             category_context += f"🚨 SCORING INSTRUCTION: Award 'Tagging & Categorization' parameter a score of 0 points. "
             category_context += f"Missing categorization prevents proper tracking and reporting. "
-            category_context += f"All customer interactions must be properly categorized.\n"
+            category_context += f"All customer interactions must be properly categorized using one of the 59 official categories.\n"
 
         response_text = ""
 
@@ -231,6 +299,9 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
             system_prompt = f"""You are a customer support QA analyst for Pepperstone, a forex broker.
             You will analyze customer support transcripts and score them on quality parameters.
             YOUR RESPONSE MUST BE IN VALID JSON FORMAT.
+            
+            CRITICAL: For 'Tagging & Categorization' parameter, ONLY the 59 official Pepperstone categories are valid.
+            Any other category (including Knowledge Base categories) is INCORRECT.
             
             You will evaluate how well the agent's responses match the Knowledge Base answers when a customer asks a question covered in the KB.
             
@@ -298,7 +369,9 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
                 return None
 
             system_prompt = f"""You are a QA analyst for Pepperstone, a forex broker. Score the support transcript according to the rules and context provided. 
-            Your response must be a valid JSON object. Use the full scoring range 0-100."""
+            Your response must be a valid JSON object. Use the full scoring range 0-100.
+            
+            CRITICAL: For 'Tagging & Categorization', only the 59 official Pepperstone categories are valid."""
 
             user_prompt = f"""Score this support transcript on a scale of 0-{scale_max} for EXACTLY these parameters:
             {parameters_list}
@@ -341,7 +414,7 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
 
         if not analysis:
             print("Error: Failed to parse API response to JSON")
-            print(f"Response preview: {response_text[:1000]}")  # Show first 1000 chars
+            print(f"Response preview: {response_text[:1000]}")
             return None
 
         # Calculate weighted score
@@ -378,6 +451,7 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
         analysis["extracted_category"] = extracted_category
         analysis["category_scoring_strategy"] = scoring_strategy
         analysis["category_boost_applied"] = should_boost_tagging
+        analysis["category_is_valid_official"] = scoring_strategy == "boost"  # NEW: Clear indicator
 
         return analysis
 
@@ -389,15 +463,7 @@ def analyze_chat_transcript(transcript, rules, kb, target_language="en", prompt_
     
     
 def create_downloadable_json(result):
-    """
-    Create a properly formatted JSON string for download
-    
-    Args:
-        result (dict): Analysis result dictionary
-        
-    Returns:
-        str: Formatted JSON string
-    """
+    """Create a properly formatted JSON string for download"""
     try:
         return json.dumps(result, indent=2, ensure_ascii=False)
     except Exception as e:
@@ -405,16 +471,7 @@ def create_downloadable_json(result):
         return json.dumps({"error": "Failed to format results"}, indent=2)
 
 def create_downloadable_csv(result, rules):
-    """
-    Create a CSV string from analysis results for download
-    
-    Args:
-        result (dict): Analysis result dictionary
-        rules (dict): Evaluation rules dictionary
-        
-    Returns:
-        str: CSV formatted string
-    """
+    """Create a CSV string from analysis results for download"""
     try:
         csv_data = "Parameter,Score,Has Suggestion\n"
         
@@ -423,7 +480,6 @@ def create_downloadable_csv(result, rules):
             if param_name in result and isinstance(result[param_name], dict):
                 score = result[param_name].get("score", "N/A")
                 has_suggestion = "Yes" if result[param_name].get("suggestion") else "No"
-                # Escape parameter name for CSV
                 param_name_escaped = f'"{param_name}"' if ',' in param_name else param_name
                 csv_data += f'{param_name_escaped},{score},{has_suggestion}\n'
         
@@ -433,16 +489,7 @@ def create_downloadable_csv(result, rules):
         return "Parameter,Score,Has Suggestion\nError,N/A,No\n"
 
 def create_batch_csv(results, rules):
-    """
-    Create a detailed CSV for batch analysis results
-    
-    Args:
-        results (list): List of analysis result dictionaries
-        rules (dict): Evaluation rules dictionary
-        
-    Returns:
-        str: CSV formatted string
-    """
+    """Create a detailed CSV for batch analysis results"""
     try:
         csv_data = "Chat ID,Parameter,Score,Explanation,Example,Suggestion\n"
         
@@ -455,12 +502,10 @@ def create_batch_csv(results, rules):
                     param_data = result[param_name]
                     score = param_data.get("score", "N/A")
                     
-                    # Clean and escape text fields for CSV
                     explanation = str(param_data.get("explanation", "")).replace('"', '""')
                     example = str(param_data.get("example", "")).replace('"', '""')
                     suggestion = str(param_data.get("suggestion", "N/A")).replace('"', '""')
                     
-                    # Handle None values
                     if suggestion in ["None", "null", "NULL"]:
                         suggestion = "N/A"
                     
@@ -472,24 +517,13 @@ def create_batch_csv(results, rules):
         return "Chat ID,Parameter,Score,Explanation,Example,Suggestion\nError,Error,N/A,Failed to generate report,N/A,N/A\n"
 
 def get_quality_level_from_score(score, rules):
-    """
-    Determine quality level based on score and rules
-    
-    Args:
-        score (float): The overall score
-        rules (dict): Evaluation rules dictionary
-        
-    Returns:
-        str: Quality level name
-    """
+    """Determine quality level based on score and rules"""
     try:
-        # Use scoring system from rules if available
         if "scoring_system" in rules and "quality_levels" in rules["scoring_system"]:
             for level in rules["scoring_system"]["quality_levels"]:
                 if level["range"]["min"] <= score <= level["range"]["max"]:
                     return level["name"]
         
-        # Fallback to simple quality level determination
         if score >= 85:
             return "Excellent"
         elif score >= 70:
@@ -503,15 +537,7 @@ def get_quality_level_from_score(score, rules):
         return "Unknown"
 
 def get_quality_color_class(quality_level):
-    """
-    Get CSS color class based on quality level
-    
-    Args:
-        quality_level (str): Quality level name
-        
-    Returns:
-        str: CSS class name
-    """
+    """Get CSS color class based on quality level"""
     quality_level_lower = quality_level.lower()
     
     if "excellent" in quality_level_lower:
@@ -523,19 +549,10 @@ def get_quality_color_class(quality_level):
     elif "poor" in quality_level_lower:
         return "score-box-poor"
     else:
-        return "score-box-needs-improvement"  # Default
+        return "score-box-needs-improvement"
 
 def validate_analysis_result(result, rules):
-    """
-    Validate that analysis result has all required parameters
-    
-    Args:
-        result (dict): Analysis result dictionary
-        rules (dict): Evaluation rules dictionary
-        
-    Returns:
-        tuple: (is_valid, missing_parameters)
-    """
+    """Validate that analysis result has all required parameters"""
     if not result or not isinstance(result, dict):
         return False, ["Invalid result structure"]
     
@@ -553,34 +570,22 @@ def validate_analysis_result(result, rules):
     return len(missing_params) == 0, missing_params
 
 def enhance_analysis_result(result, rules):
-    """
-    Enhance analysis result with additional metadata and validation
-    
-    Args:
-        result (dict): Analysis result dictionary
-        rules (dict): Evaluation rules dictionary
-        
-    Returns:
-        dict: Enhanced analysis result
-    """
+    """Enhance analysis result with additional metadata and validation"""
     if not result:
         return None
     
     try:
-        # Add timestamp
         result["analysis_timestamp"] = datetime.now().isoformat()
         
-        # Add quality level
         overall_score = result.get("weighted_overall_score", 0)
         result["quality_level"] = get_quality_level_from_score(overall_score, rules)
         result["quality_color_class"] = get_quality_color_class(result["quality_level"])
         
-        # Validate and fill missing parameters
         for param in rules["parameters"]:
             param_name = param["name"]
             if param_name not in result:
                 result[param_name] = {
-                    "score": 50,  # Default neutral score
+                    "score": 50,
                     "explanation": "No analysis available for this parameter",
                     "example": "N/A",
                     "suggestion": "Please review manually"
